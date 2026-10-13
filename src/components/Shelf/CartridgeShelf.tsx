@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Cartridge, CartridgeFolder } from '../../types';
 import { CartridgeItem } from './CartridgeItem';
@@ -50,6 +50,69 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
   reducedMotion = false,
 }) => {
   const shelfRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const [canScroll, setCanScroll] = useState(false);
+
+  // Monitor scroll position of the shelf
+  useEffect(() => {
+    const el = shelfRef.current;
+    if (!el) return;
+
+    const checkScroll = () => {
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (maxScroll <= 4) {
+        setCanScroll(false);
+        setScrollProgress(0);
+      } else {
+        setCanScroll(true);
+        setScrollProgress(Math.min(1, Math.max(0, el.scrollLeft / maxScroll)));
+      }
+    };
+
+    checkScroll();
+    el.addEventListener('scroll', checkScroll, { passive: true });
+    window.addEventListener('resize', checkScroll);
+
+    return () => {
+      el.removeEventListener('scroll', checkScroll);
+      window.removeEventListener('resize', checkScroll);
+    };
+  }, [cartridges.length, selectedFolderId]);
+
+  const handleTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!shelfRef.current || !trackRef.current) return;
+    const rect = trackRef.current.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+    const maxScroll = shelfRef.current.scrollWidth - shelfRef.current.clientWidth;
+    shelfRef.current.scrollTo({ left: ratio * maxScroll, behavior: 'smooth' });
+  };
+
+  const handleThumbPointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!shelfRef.current || !trackRef.current) return;
+
+    const startX = e.clientX;
+    const initialScroll = shelfRef.current.scrollLeft;
+    const trackRect = trackRef.current.getBoundingClientRect();
+    const maxScroll = shelfRef.current.scrollWidth - shelfRef.current.clientWidth;
+
+    const onPointerMove = (ev: PointerEvent) => {
+      const deltaX = ev.clientX - startX;
+      const scrollDelta = (deltaX / trackRect.width) * maxScroll;
+      shelfRef.current?.scrollTo({ left: initialScroll + scrollDelta });
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  };
 
   const scroll = (direction: 'left' | 'right') => {
     if (shelfRef.current) {
@@ -178,10 +241,7 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
 
         <div
           ref={shelfRef}
-          className="flex items-end gap-2 sm:gap-2.5 overflow-x-auto pb-7 pt-4 px-3 sm:px-6 scroll-smooth scrollbar-thin min-h-[200px]"
-          style={{
-            scrollbarGutter: 'stable',
-          }}
+          className="flex items-end gap-2 sm:gap-2.5 overflow-x-auto pb-4 pt-4 px-3 sm:px-6 scroll-smooth no-scrollbar min-h-[195px]"
         >
           {visibleCartridges.length === 0 && selectedFolderId && (
             <div className="w-full py-10 flex flex-col items-center justify-center text-neutral-400 font-retro-mono text-xs gap-1 select-none">
@@ -278,6 +338,65 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
 
         {/* Tactile front shelf ledge */}
         <div className="h-3 w-full bg-gradient-to-r from-neutral-200 via-neutral-300 to-neutral-200 dark:from-neutral-800 dark:via-neutral-700 dark:to-neutral-800 rounded-b-md border-t border-white/60 dark:border-neutral-700 shadow-md" />
+
+        {/* 3. Custom Retro Media Scrubber / Scrollbar Rail */}
+        {canScroll && (
+          <div className="flex items-center justify-center gap-2 sm:gap-3 mt-3 px-2 select-none">
+            <button
+              type="button"
+              onClick={() => {
+                sound.playBeep();
+                scroll('left');
+              }}
+              aria-label="Scroll shelf left"
+              className="p-1 rounded text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Recessed Audio Rail Track */}
+            <div
+              ref={trackRef}
+              onClick={handleTrackClick}
+              className="relative w-full max-w-xs sm:max-w-md h-3.5 bg-neutral-200/90 dark:bg-black/55 rounded-full shadow-[inset_0_1px_3px_rgba(0,0,0,0.35)] border border-black/10 dark:border-white/10 cursor-pointer overflow-hidden p-0.5 flex items-center"
+            >
+              {/* Subtle background ruler ticks */}
+              <div className="absolute inset-0 flex justify-between px-4 items-center opacity-25 pointer-events-none">
+                <span className="w-[1.5px] h-2 bg-black dark:bg-white rounded-full" />
+                <span className="w-[1px] h-1.5 bg-black dark:bg-white" />
+                <span className="w-[1.5px] h-2 bg-black dark:bg-white rounded-full" />
+                <span className="w-[1px] h-1.5 bg-black dark:bg-white" />
+                <span className="w-[1.5px] h-2 bg-black dark:bg-white rounded-full" />
+              </div>
+
+              {/* Draggable Tactile Thumb Slider */}
+              <div
+                onPointerDown={handleThumbPointerDown}
+                style={{
+                  left: `calc(${scrollProgress * 100}% - ${scrollProgress * 54}px)`,
+                  width: '54px',
+                }}
+                className="absolute h-2.5 rounded-full bg-gradient-to-b from-[#A4B290] to-[#738361] dark:from-[#5C5C66] dark:to-[#42424A] border border-white/60 dark:border-white/15 shadow-[0_1px_3px_rgba(0,0,0,0.4)] cursor-grab active:cursor-grabbing hover:brightness-105 transition-all flex items-center justify-center gap-1"
+              >
+                <div className="w-[1px] h-1.5 bg-black/40 rounded-full" />
+                <div className="w-[1px] h-1.5 bg-black/40 rounded-full" />
+                <div className="w-[1px] h-1.5 bg-black/40 rounded-full" />
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                sound.playBeep();
+                scroll('right');
+              }}
+              aria-label="Scroll shelf right"
+              className="p-1 rounded text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
