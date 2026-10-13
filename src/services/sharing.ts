@@ -7,7 +7,11 @@ export interface CartridgeExportPayload {
 }
 
 // 1. Export cartridge as physical-like .cartridge file (works with 100% of large photos and notes)
-export function exportCartridgeToFile(cartridge: Cartridge, senderName: string = 'A Friend') {
+export function exportCartridgeToFile(
+  cartridge: Cartridge,
+  senderName: string = 'A Friend',
+  extension: 'cartridge' | 'txt' | 'json' = 'cartridge'
+) {
   const exportData: CartridgeExportPayload = {
     format: 'CARTRIDGE_MEMORIES_ROM_V1',
     exportedAt: Date.now(),
@@ -19,20 +23,29 @@ export function exportCartridgeToFile(cartridge: Cartridge, senderName: string =
   };
 
   const jsonStr = JSON.stringify(exportData, null, 2);
-  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const isTxt = extension === 'txt';
+  const mimeType = isTxt ? 'text/plain;charset=utf-8' : 'application/json';
+  const blob = new Blob([jsonStr], { type: mimeType });
   const url = URL.createObjectURL(blob);
 
   const cleanFilename = (cartridge.label || 'CARTRIDGE')
     .replace(/[^a-zA-Z0-9_-]/g, '_')
     .toUpperCase();
 
+  const fullFilename = isTxt ? `${cleanFilename}.txt` : `${cleanFilename}.cartridge.json`;
+
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${cleanFilename}.cartridge`;
+  a.download = fullFilename;
+  a.setAttribute('download', fullFilename);
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+
+  // Delay revoking ObjectURL so Chrome/Edge download manager has time to read the download attribute name
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 3500);
 }
 
 // 2. Import cartridge from a .cartridge file
@@ -62,8 +75,38 @@ export async function importCartridgeFromFile(file: File): Promise<Cartridge> {
   };
 }
 
-// 3. Generate Share Link (works for text/notes and links)
-export function generateShareUrl(cartridge: Cartridge, senderName: string = 'A Friend'): { url?: string; isTooLarge: boolean } {
+export interface ShareUrlResult {
+  url: string;
+  charCount: number;
+  sizeKb: number;
+  isLarge: boolean;
+}
+
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const len = bytes.byteLength;
+  const chunkSize = 16384;
+  for (let i = 0; i < len; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, len));
+    binary += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  return btoa(binary);
+}
+
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+// 3. Generate Share Link (compressed URL hash with zero backend required!)
+export async function generateShareUrl(
+  cartridge: Cartridge,
+  senderName: string = 'A Friend'
+): Promise<ShareUrlResult> {
   const exportPayload: CartridgeExportPayload = {
     format: 'CARTRIDGE_MEMORIES_ROM_V1',
     exportedAt: Date.now(),
@@ -75,35 +118,73 @@ export function generateShareUrl(cartridge: Cartridge, senderName: string = 'A F
   };
 
   const jsonStr = JSON.stringify(exportPayload);
-  
-  // URL limit check: if payload exceeds ~12KB (common when multiple high-res photos are uploaded), recommend file export
-  if (jsonStr.length > 12000) {
-    return { isTooLarge: true };
-  }
+  let finalUrl = '';
 
   try {
+    // Native GZIP compression stream reduces URL size by up to 70%
+    if (typeof CompressionStream !== 'undefined') {
+      const stream = new Blob([jsonStr]).stream().pipeThrough(new CompressionStream('gzip'));
+      const response = new Response(stream);
+      const buffer = await response.arrayBuffer();
+      const compressedB64 = uint8ArrayToBase64(new Uint8Array(buffer));
+      const origin = window.location.origin;
+      const pathname = window.location.pathname;
+      finalUrl = `${origin}${pathname}#cartridge=gz:${compressedB64}`;
+    }
+  } catch (err) {
+    console.warn('Gzip stream compression failed, falling back to base64', err);
+  }
+
+  if (!finalUrl) {
+    // Fallback: standard URI base64
     const encoded = btoa(encodeURIComponent(jsonStr));
     const origin = window.location.origin;
     const pathname = window.location.pathname;
-    const url = `${origin}${pathname}#cartridge=${encoded}`;
-    return { url, isTooLarge: false };
-  } catch (err) {
-    console.error('Error generating share link', err);
-    return { isTooLarge: true };
+    finalUrl = `${origin}${pathname}#cartridge=${encoded}`;
   }
+
+  const charCount = finalUrl.length;
+  const sizeKb = Math.round((charCount / 1024) * 10) / 10;
+  const isLarge = charCount > 500000; // > 500KB
+
+  return {
+    url: finalUrl,
+    charCount,
+    sizeKb,
+    isLarge,
+  };
 }
 
 // 4. Decode cartridge from URL hash if opened via link
-export function decodeCartridgeFromUrl(): Cartridge | null {
+export async function decodeCartridgeFromUrl(): Promise<Cartridge | null> {
   if (typeof window === 'undefined') return null;
   const hash = window.location.hash;
   if (!hash || !hash.includes('#cartridge=')) return null;
 
   try {
-    const rawEncoded = hash.replace('#cartridge=', '');
-    const jsonStr = decodeURIComponent(atob(rawEncoded));
-    const payload = JSON.parse(jsonStr) as CartridgeExportPayload;
+    let rawEncoded = hash.replace('#cartridge=', '');
+    // If browser or chat app percent-encoded the hash, decode it
+    if (rawEncoded.includes('%')) {
+      try {
+        rawEncoded = decodeURIComponent(rawEncoded);
+      } catch {
+        // Keep rawEncoded if URI decoding fails
+      }
+    }
 
+    let jsonStr = '';
+
+    if (rawEncoded.startsWith('gz:') && typeof DecompressionStream !== 'undefined') {
+      const base64Data = rawEncoded.slice(3);
+      const bytes = base64ToUint8Array(base64Data);
+      const stream = new Blob([bytes as unknown as BlobPart]).stream().pipeThrough(new DecompressionStream('gzip'));
+      const response = new Response(stream);
+      jsonStr = await response.text();
+    } else {
+      jsonStr = decodeURIComponent(atob(rawEncoded));
+    }
+
+    const payload = JSON.parse(jsonStr) as CartridgeExportPayload;
     if (payload && payload.cartridge) {
       return {
         ...payload.cartridge,

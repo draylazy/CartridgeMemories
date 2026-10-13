@@ -67,31 +67,40 @@ export const App: React.FC = () => {
 
   // Initial load from IndexedDB and URL Hash check
   useEffect(() => {
+    async function checkForSharedLink(existingCartridges: Cartridge[]) {
+      const sharedFromUrl = await decodeCartridgeFromUrl();
+      if (sharedFromUrl) {
+        const exists = existingCartridges.find((c) => c.id === sharedFromUrl.id);
+        const updated = exists ? existingCartridges : [sharedFromUrl, ...existingCartridges];
+        if (!exists) {
+          await saveCartridge(sharedFromUrl);
+        }
+        setCartridges(updated);
+        setLoadedCartridgeId(sharedFromUrl.id);
+        showToast(`📥 Received cartridge from ${sharedFromUrl.sharedBy || 'a friend'}!`);
+        sound.playClunk();
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+    }
+
     async function initData() {
       try {
         const loaded = await loadAllCartridges();
-
-        // Check if someone sent a cartridge via shareable link
-        const sharedFromUrl = decodeCartridgeFromUrl();
-        if (sharedFromUrl) {
-          const exists = loaded.find((c) => c.id === sharedFromUrl.id);
-          const updated = exists ? loaded : [sharedFromUrl, ...loaded];
-          if (!exists) {
-            await saveCartridge(sharedFromUrl);
-          }
-          setCartridges(updated);
-          setLoadedCartridgeId(sharedFromUrl.id);
-          showToast(`📥 Received cartridge from ${sharedFromUrl.sharedBy || 'a friend'}!`);
-          sound.playClunk();
-          window.history.replaceState(null, '', window.location.pathname);
-        } else {
-          setCartridges(loaded);
-        }
+        setCartridges(loaded);
+        await checkForSharedLink(loaded);
       } catch (err) {
         console.error('Failed loading cartridges from IndexedDB', err);
       }
     }
+
     initData();
+
+    const handleHashChange = async () => {
+      const current = await loadAllCartridges();
+      await checkForSharedLink(current);
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
   const loadedCartridge =
@@ -343,11 +352,11 @@ export const App: React.FC = () => {
       }}
       className="min-h-screen flex flex-col justify-between py-6 px-4 sm:px-6 relative selection:bg-[#B9C29A]/40 overflow-x-hidden"
     >
-      {/* Hidden file input for importing .cartridge / .json / .txt files */}
+      {/* Hidden file input for importing cartridge files */}
       <input
         ref={fileImportInputRef}
         type="file"
-        accept=".cartridge,.json,.txt"
+        accept=".cartridge,.json,.txt,*"
         className="hidden"
         onChange={(e) => {
           if (e.target.files && e.target.files[0]) {
