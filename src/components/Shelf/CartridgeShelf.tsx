@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Cartridge } from '../../types';
 import { CartridgeItem } from './CartridgeItem';
-import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, FolderOpen } from 'lucide-react';
 import { sound } from '../../services/audio';
 
 interface CartridgeShelfProps {
@@ -10,6 +10,7 @@ interface CartridgeShelfProps {
   activeCartridge: Cartridge | null;
   onSelectCartridge: (cartridge: Cartridge) => void;
   onNewCartridge: () => void;
+  onOpenImport?: () => void;
   onEditCartridge: (cartridge: Cartridge) => void;
   onDeleteCartridge: (cartridge: Cartridge) => void;
   onShareCartridge?: (cartridge: Cartridge) => void;
@@ -23,6 +24,7 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
   activeCartridge,
   onSelectCartridge,
   onNewCartridge,
+  onOpenImport,
   onEditCartridge,
   onDeleteCartridge,
   onShareCartridge,
@@ -131,6 +133,33 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
               </div>
               <span className="font-silkscreen text-[8px] text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-center px-0.5 leading-tight">
                 + NEW
+                <br />
+                ROM
+              </span>
+            </button>
+          </motion.div>
+
+          {/* "Import ROM" Slot */}
+          <motion.div
+            layout
+            whileHover={reducedMotion ? {} : { y: -8 }}
+            whileTap={{ scale: 0.98 }}
+            className="shrink-0 pb-6"
+          >
+            <button
+              type="button"
+              onClick={() => {
+                sound.playBeep();
+                onOpenImport?.();
+              }}
+              aria-label="Import cartridge file"
+              className="w-[56px] sm:w-[64px] h-[155px] sm:h-[175px] rounded-t-lg rounded-b-md border-2 border-dashed border-[#87977A]/50 dark:border-[#87977A]/40 hover:border-[#87977A] bg-[#87977A]/5 dark:bg-[#87977A]/10 flex flex-col items-center justify-center gap-2 group transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#87977A]"
+            >
+              <div className="w-7 h-7 rounded-full bg-[#87977A]/20 dark:bg-[#87977A]/30 flex items-center justify-center text-[#87977A] group-hover:bg-[#87977A]/40 group-hover:scale-110 transition-all">
+                <FolderOpen className="w-4 h-4" />
+              </div>
+              <span className="font-silkscreen text-[8px] text-[#87977A] uppercase tracking-wider text-center px-0.5 leading-tight">
+                IMPORT
                 <br />
                 ROM
               </span>

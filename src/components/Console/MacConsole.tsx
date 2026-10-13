@@ -151,6 +151,13 @@ export const MacConsole: React.FC<MacConsoleProps> = ({
                         >
                           New Cartridge...
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAction('import_file')}
+                          className="w-full text-left px-3 py-1 hover:bg-[#242D1F] hover:text-[#E8E6DF]"
+                        >
+                          Import Cartridge (📂)...
+                        </button>
                         {loadedCartridge && (
                           <button
                             type="button"

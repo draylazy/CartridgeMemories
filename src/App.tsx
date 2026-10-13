@@ -37,6 +37,7 @@ export const App: React.FC = () => {
   const [editingCartridge, setEditingCartridge] = useState<Cartridge | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [sharingCartridge, setSharingCartridge] = useState<Cartridge | null>(null);
+  const [isDraggingOverPage, setIsDraggingOverPage] = useState(false);
 
   // File import ref for menu
   const fileImportInputRef = useRef<HTMLInputElement>(null);
@@ -319,12 +320,34 @@ export const App: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen flex flex-col justify-between py-6 px-4 sm:px-6 relative selection:bg-[#B9C29A]/40 overflow-x-hidden">
-      {/* Hidden file input for importing .cartridge files */}
+    <div
+      onDragEnter={(e) => {
+        e.preventDefault();
+        if (e.dataTransfer.types.includes('Files')) {
+          setIsDraggingOverPage(true);
+        }
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+        setIsDraggingOverPage(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setIsDraggingOverPage(false);
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          handleImportFile(e.dataTransfer.files[0]);
+        }
+      }}
+      className="min-h-screen flex flex-col justify-between py-6 px-4 sm:px-6 relative selection:bg-[#B9C29A]/40 overflow-x-hidden"
+    >
+      {/* Hidden file input for importing .cartridge / .json / .txt files */}
       <input
         ref={fileImportInputRef}
         type="file"
-        accept=".cartridge,.json"
+        accept=".cartridge,.json,.txt"
         className="hidden"
         onChange={(e) => {
           if (e.target.files && e.target.files[0]) {
@@ -333,6 +356,23 @@ export const App: React.FC = () => {
           }
         }}
       />
+
+      {/* Drag & Drop Visual Overlay */}
+      {isDraggingOverPage && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-6 pointer-events-none">
+          <div className="border-4 border-dashed border-[#B9C29A] bg-[#242D1F]/95 p-8 sm:p-12 rounded-xl text-center shadow-2xl max-w-md w-full">
+            <div className="w-16 h-16 rounded-full bg-[#B9C29A]/20 mx-auto mb-4 flex items-center justify-center text-3xl animate-bounce">
+              📼
+            </div>
+            <h2 className="font-silkscreen text-xl text-[#B9C29A] tracking-wider mb-2">
+              DROP CARTRIDGE FILE
+            </h2>
+            <p className="font-retro-mono text-xs text-[#B9C29A]/80 leading-relaxed">
+              Release anywhere to insert this memory cartridge directly into the console!
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* 1. Header with Handwritten Signature Logo Wordmark */}
       <header className="w-full flex flex-col items-center text-center pt-2 sm:pt-4 select-none">
@@ -380,6 +420,7 @@ export const App: React.FC = () => {
           activeCartridge={loadedCartridge}
           onSelectCartridge={handleSelectCartridge}
           onNewCartridge={handleNewCartridge}
+          onOpenImport={() => fileImportInputRef.current?.click()}
           onEditCartridge={handleEditCartridge}
           onShareCartridge={handleShareCartridge}
           onDeleteCartridge={handleDeleteCartridge}
