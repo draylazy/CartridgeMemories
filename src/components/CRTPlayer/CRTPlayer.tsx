@@ -34,7 +34,7 @@ export const CRTPlayer: React.FC<CRTPlayerProps> = ({
 
   // Speed configuration (default 2.6s for faster, snappier playback)
   const [speedIndex, setSpeedIndex] = useState(1);
-  const slideDuration = SPEED_OPTIONS[speedIndex].duration;
+  const baseSlideDuration = SPEED_OPTIONS[speedIndex].duration;
 
   // Slide elapsed time in milliseconds (0 to slideDuration)
   const [slideElapsed, setSlideElapsed] = useState(0);
@@ -45,6 +45,20 @@ export const CRTPlayer: React.FC<CRTPlayerProps> = ({
   }, [cartridge.items]);
 
   const currentItem: MemoryItem | undefined = items[currentIndex];
+
+  // Dynamic slide duration: uses base speed setting, but gives ample reading headroom if note is long
+  const slideDuration = useMemo(() => {
+    if (!currentItem) return baseSlideDuration;
+    const fullText =
+      cartridge.type === 'NOTES'
+        ? currentItem.text || ''
+        : currentItem.caption || '';
+    if (!fullText) return baseSlideDuration;
+
+    // Minimum needed: 240ms start delay + typing time (fastest 15ms/char) + 700ms end pause
+    const minNeeded = 240 + fullText.length * 15 + 700;
+    return Math.max(baseSlideDuration, minNeeded);
+  }, [baseSlideDuration, currentItem, cartridge.type]);
 
   // Boot sequence: play CRT power on hum, then open display
   useEffect(() => {
@@ -107,7 +121,10 @@ export const CRTPlayer: React.FC<CRTPlayerProps> = ({
     setSlideElapsed(0);
   };
 
-  // Typewriter effect for notes and captions (faster ~16ms so notes finish in time)
+  // Dynamic typewriter effect:
+  // 1. Starts after image is visible (240ms initial delay)
+  // 2. Adjusts speed dynamically: slower for short text (clearly visible cadence), faster for long text
+  // 3. Leaves a slight pause before the next slide transitions
   useEffect(() => {
     if (!currentItem) return;
 
@@ -126,21 +143,50 @@ export const CRTPlayer: React.FC<CRTPlayerProps> = ({
       return;
     }
 
+    // Reset typed text when slide changes
     setTypedText('');
-    let charIndex = 0;
-    const interval = setInterval(() => {
-      charIndex++;
-      setTypedText(fullText.slice(0, charIndex));
-      if (charIndex % 3 === 0) {
-        sound.playTypewriter();
-      }
-      if (charIndex >= fullText.length) {
-        clearInterval(interval);
-      }
-    }, 16);
 
-    return () => clearInterval(interval);
-  }, [currentIndex, currentItem, cartridge.type, reducedMotion]);
+    // Lead-in delay: 240ms so the image and slide finish entering before typing starts
+    const START_DELAY_MS = 240;
+
+    // Pause at the end before going to the next slide (gives user time to read completed sentence)
+    const PAUSE_BEFORE_NEXT_MS = Math.max(650, Math.min(950, Math.round(slideDuration * 0.28)));
+
+    // Available duration for typing to complete
+    const availableTypingDuration = Math.max(600, slideDuration - START_DELAY_MS - PAUSE_BEFORE_NEXT_MS);
+
+    // Calculate ideal per-character speed:
+    // If text is short -> slower (~50-75ms) so typewriter effect is clearly visible
+    // If text is long -> faster (~14-30ms) based on the slide duration
+    const idealInterval = availableTypingDuration / fullText.length;
+    const charInterval = Math.max(14, Math.min(75, Math.round(idealInterval)));
+
+    // Audio click cadence
+    const audioFrequency = charInterval >= 45 ? 2 : 3;
+
+    let charIndex = 0;
+    let typingTimer: NodeJS.Timeout | null = null;
+
+    const startTimer = setTimeout(() => {
+      typingTimer = setInterval(() => {
+        charIndex++;
+        setTypedText(fullText.slice(0, charIndex));
+
+        if (charIndex % audioFrequency === 0) {
+          sound.playTypewriter();
+        }
+
+        if (charIndex >= fullText.length) {
+          if (typingTimer) clearInterval(typingTimer);
+        }
+      }, charInterval);
+    }, START_DELAY_MS);
+
+    return () => {
+      clearTimeout(startTimer);
+      if (typingTimer) clearInterval(typingTimer);
+    };
+  }, [currentIndex, currentItem, cartridge.type, reducedMotion, slideDuration]);
 
   // Keyboard navigation: Space = pause/play, Arrows = prev/next, Esc = exit
   useEffect(() => {

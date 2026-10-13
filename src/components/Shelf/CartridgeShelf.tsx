@@ -13,15 +13,20 @@ interface CartridgeShelfProps {
   onSelectFolder: (folderId: string | null) => void;
   onNewFolder: () => void;
   onEditFolder?: (folder: CartridgeFolder) => void;
-  onSelectCartridge: (cartridge: Cartridge) => void;
+  onSelectCartridge: (cartridge: Cartridge, originRect?: DOMRect) => void;
   onNewCartridge: () => void;
   onOpenImport?: () => void;
   onEditCartridge: (cartridge: Cartridge) => void;
   onDeleteCartridge: (cartridge: Cartridge) => void;
   onShareCartridge?: (cartridge: Cartridge) => void;
   onMoveToFolder?: (cartridge: Cartridge) => void;
-  onDragStartCartridge?: (cartridge: Cartridge) => void;
-  onDragEndCartridge?: (cartridge: Cartridge, dropSuccess: boolean) => void;
+  onPointerDragStartCartridge?: (
+    cartridge: Cartridge,
+    originRect: DOMRect,
+    clientX: number,
+    clientY: number
+  ) => void;
+  draggingCartridgeId?: string | null;
   reducedMotion?: boolean;
 }
 
@@ -40,8 +45,8 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
   onDeleteCartridge,
   onShareCartridge,
   onMoveToFolder,
-  onDragStartCartridge,
-  onDragEndCartridge,
+  onPointerDragStartCartridge,
+  draggingCartridgeId,
   reducedMotion = false,
 }) => {
   const shelfRef = useRef<HTMLDivElement>(null);
@@ -208,8 +213,8 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
                   onDelete={
                     cartridge.monthIndex < 0 ? onDeleteCartridge : undefined
                   }
-                  onDragStart={onDragStartCartridge}
-                  onDragEnd={onDragEndCartridge}
+                  onPointerDragStart={onPointerDragStartCartridge}
+                  isBeingDragged={draggingCartridgeId === cartridge.id}
                   reducedMotion={reducedMotion}
                 />
               </motion.div>

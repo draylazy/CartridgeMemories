@@ -1,19 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import type { Cartridge } from '../../types';
 import { sound } from '../../services/audio';
-import { MoreVertical, Edit2, Trash2, Image, FileText, Sparkles, Share2, Lock, Folder } from 'lucide-react';
+import { MoreVertical, Edit2, Trash2, Share2, Folder } from 'lucide-react';
+import { CartridgeVisual } from './CartridgeVisual';
 
 interface CartridgeItemProps {
   cartridge: Cartridge;
-  onSelect: (cartridge: Cartridge) => void;
+  onSelect: (cartridge: Cartridge, originRect?: DOMRect) => void;
   onEdit: (cartridge: Cartridge) => void;
   onDelete?: (cartridge: Cartridge) => void;
   onShare?: (cartridge: Cartridge) => void;
   onMoveToFolder?: (cartridge: Cartridge) => void;
-  isDraggingSlot?: boolean;
-  onDragStart?: (cartridge: Cartridge) => void;
-  onDragEnd?: (cartridge: Cartridge, dropSuccess: boolean) => void;
+  onPointerDragStart?: (
+    cartridge: Cartridge,
+    originRect: DOMRect,
+    clientX: number,
+    clientY: number
+  ) => void;
+  isBeingDragged?: boolean;
   reducedMotion?: boolean;
 }
 
@@ -24,12 +29,23 @@ export const CartridgeItem: React.FC<CartridgeItemProps> = ({
   onDelete,
   onShare,
   onMoveToFolder,
-  onDragStart,
-  onDragEnd,
+  onPointerDragStart,
+  isBeingDragged = false,
   reducedMotion = false,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [isPointerDragging, setIsPointerDragging] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    // Only respond to primary button (left mouse) or touch
+    if (e.button !== 0) return;
+    if (menuOpen) return;
+
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (rect) {
+      onPointerDragStart?.(cartridge, rect, e.clientX, e.clientY);
+    }
+  };
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -37,134 +53,51 @@ export const CartridgeItem: React.FC<CartridgeItemProps> = ({
     setMenuOpen(true);
   };
 
-  const getTypeIcon = () => {
-    switch (cartridge.type) {
-      case 'PICTURES':
-        return <Image className="w-2.5 h-2.5 opacity-60" />;
-      case 'NOTES':
-        return <FileText className="w-2.5 h-2.5 opacity-60" />;
-      case 'PICTURES_NOTES':
-        return <Sparkles className="w-2.5 h-2.5 opacity-60" />;
-    }
-  };
-
   return (
     <div className="relative group select-none flex flex-col items-center">
       <motion.div
-        layoutId={`cartridge-${cartridge.id}`}
+        ref={containerRef}
         tabIndex={0}
         role="button"
         aria-label={`Cartridge ${cartridge.label}: ${cartridge.items.length} memories. Press Enter to insert into console.`}
-        onClick={() => {
-          if (!isPointerDragging) {
-            onSelect(cartridge);
-          }
-        }}
+        onPointerDown={handlePointerDown}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             sound.playClunk();
-            onSelect(cartridge);
+            const rect = containerRef.current?.getBoundingClientRect();
+            onSelect(cartridge, rect);
           }
         }}
         onContextMenu={handleContextMenu}
-        whileHover={reducedMotion ? {} : { y: -16, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
-        whileTap={reducedMotion ? {} : { scale: 0.98 }}
-        drag
-        dragSnapToOrigin
-        onDragStart={() => {
-          setIsPointerDragging(true);
-          sound.playWhirr();
-          onDragStart?.(cartridge);
-        }}
-        onDragEnd={(_, info) => {
-          setTimeout(() => setIsPointerDragging(false), 80);
-          // Check if dropped near top half (toward console)
-          const droppedInSlotArea = info.point.y < window.innerHeight * 0.58;
-          onDragEnd?.(cartridge, droppedInSlotArea);
-          if (droppedInSlotArea) {
-            onSelect(cartridge);
-          }
-        }}
-        whileDrag={{
-          scale: 1.06,
-          rotate: 4,
-          zIndex: 50,
-          cursor: 'grabbing',
-          boxShadow: '0 25px 40px -10px rgba(0,0,0,0.35)',
-        }}
-        className={`relative w-[48px] sm:w-[54px] h-[150px] sm:h-[168px] rounded-t-lg rounded-b-md cursor-grab active:cursor-grabbing focus:outline-none focus-visible:ring-4 focus-visible:ring-[#87977A] transition-shadow ${
-          isPointerDragging ? 'z-50' : 'z-10'
+        whileHover={
+          reducedMotion || isBeingDragged
+            ? {}
+            : { y: -16, transition: { type: 'spring', stiffness: 400, damping: 25 } }
+        }
+        whileTap={reducedMotion || isBeingDragged ? {} : { scale: 0.98 }}
+        className={`cursor-grab active:cursor-grabbing focus:outline-none focus-visible:ring-4 focus-visible:ring-[#87977A] transition-opacity ${
+          isBeingDragged ? 'opacity-25' : 'opacity-100'
         }`}
-        style={{
-          backgroundColor: cartridge.color,
-          boxShadow:
-            'inset 2px 2px 0px rgba(255,255,255,0.35), inset -2px -2px 0px rgba(0,0,0,0.3), 0 8px 16px -4px rgba(0,0,0,0.22), 0 2px 4px rgba(0,0,0,0.1)',
-        }}
       >
-        {/* Top grip bevel lines (3 lines) */}
-        <div className="pt-1.5 px-1.5 flex flex-col gap-0.5 items-center">
-          <div className="w-full h-[2.5px] bg-black/25 rounded-full shadow-[0_1px_0_rgba(255,255,255,0.2)]" />
-          <div className="w-full h-[2.5px] bg-black/25 rounded-full shadow-[0_1px_0_rgba(255,255,255,0.2)]" />
-          <div className="w-full h-[2.5px] bg-black/25 rounded-full shadow-[0_1px_0_rgba(255,255,255,0.2)]" />
-        </div>
-
-        {/* Side notch tabs (tactile cassette/cartridge aesthetic) */}
-        <div className="absolute top-7 -left-[1px] w-[2.5px] h-5 bg-black/20 rounded-r-sm" />
-        <div className="absolute top-7 -right-[1px] w-[2.5px] h-5 bg-black/20 rounded-l-sm" />
-
-        {/* White rounded label sticker with rotated text */}
-        <div className="absolute inset-x-1 sm:inset-x-1.5 top-5.5 bottom-4.5 bg-[#FCFAF6] dark:bg-[#F2EFE8] rounded-[4px] shadow-[inset_0_1px_2px_rgba(0,0,0,0.15),0_1px_1px_rgba(255,255,255,0.6)] p-0.5 sm:p-1 flex flex-col items-center justify-between border border-black/10 overflow-hidden">
-          {/* Subtle label top header stripe */}
-          <div className="w-full flex items-center justify-between px-0.5 border-b border-black/10 pb-0.5">
-            <span className="font-silkscreen text-[6px] tracking-tight text-neutral-500 font-semibold flex items-center gap-0.5">
-              {cartridge.isReadOnly ? <Lock className="w-2 h-2 text-amber-700" /> : 'ROM'}
-            </span>
-            {getTypeIcon()}
-          </div>
-
-          {/* Rotated uppercase month text */}
-          <div className="flex-1 flex items-center justify-center my-0.5 overflow-hidden">
-            <span
-              className="font-silkscreen font-bold tracking-wider text-[9px] sm:text-[10px] text-[#242321] uppercase select-none transform rotate-180"
-              style={{
-                writingMode: 'vertical-rl',
-              }}
-            >
-              {cartridge.label}
-            </span>
-          </div>
-
-          {/* Label footer: item count badge */}
-          <div className="w-full pt-0.5 border-t border-black/10 flex items-center justify-center">
-            <span className="font-pixel text-[10px] sm:text-[11px] tracking-tight text-neutral-600 font-semibold leading-none">
-              {cartridge.items.length > 0 ? `${cartridge.items.length} ITEMS` : 'EMPTY'}
-            </span>
-          </div>
-        </div>
-
-        {/* Bottom edge: gold contact pins hint */}
-        <div className="absolute bottom-0 inset-x-2 h-1.5 flex justify-around items-end pb-[1px]">
-          <div className="w-1.5 h-1 bg-[#D4AF37]/80 rounded-t-[1px]" />
-          <div className="w-1.5 h-1 bg-[#D4AF37]/80 rounded-t-[1px]" />
-          <div className="w-1.5 h-1 bg-[#D4AF37]/80 rounded-t-[1px]" />
-        </div>
+        <CartridgeVisual cartridge={cartridge} />
       </motion.div>
 
-      {/* Tiny gear/options button on hover */}
+      {/* Options menu trigger button */}
       <button
         type="button"
+        onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
           setMenuOpen(!menuOpen);
         }}
         aria-label={`Options for ${cartridge.label}`}
-        className="mt-1 p-1 rounded-full text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 opacity-60 hover:opacity-100 transition-opacity"
+        className="mt-1 p-1 rounded-full text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 opacity-60 hover:opacity-100 transition-opacity cursor-pointer"
       >
         <MoreVertical className="w-3.5 h-3.5" />
       </button>
 
-      {/* Context Menu / Options Popup */}
+      {/* Context Menu / Options Dropdown */}
       {menuOpen && (
         <>
           <div
@@ -183,7 +116,7 @@ export const CartridgeItem: React.FC<CartridgeItemProps> = ({
                   setMenuOpen(false);
                   onShare(cartridge);
                 }}
-                className="w-full px-3 py-1.5 text-left text-xs font-retro-mono flex items-center gap-2 hover:bg-[#2C2B29] hover:text-[#F6F4ED] dark:hover:bg-[#43434B]"
+                className="w-full px-3 py-1.5 text-left text-xs font-retro-mono flex items-center gap-2 hover:bg-[#2C2B29] hover:text-[#F6F4ED] dark:hover:bg-[#43434B] cursor-pointer"
               >
                 <Share2 className="w-3 h-3 text-[#87977A]" /> Send / Share
               </button>
@@ -196,7 +129,7 @@ export const CartridgeItem: React.FC<CartridgeItemProps> = ({
                   setMenuOpen(false);
                   onEdit(cartridge);
                 }}
-                className="w-full px-3 py-1.5 text-left text-xs font-retro-mono flex items-center gap-2 hover:bg-[#2C2B29] hover:text-[#F6F4ED] dark:hover:bg-[#43434B]"
+                className="w-full px-3 py-1.5 text-left text-xs font-retro-mono flex items-center gap-2 hover:bg-[#2C2B29] hover:text-[#F6F4ED] dark:hover:bg-[#43434B] cursor-pointer"
               >
                 <Edit2 className="w-3 h-3" /> Edit Cartridge
               </button>
@@ -209,7 +142,7 @@ export const CartridgeItem: React.FC<CartridgeItemProps> = ({
                   setMenuOpen(false);
                   onMoveToFolder(cartridge);
                 }}
-                className="w-full px-3 py-1.5 text-left text-xs font-retro-mono flex items-center gap-2 hover:bg-[#2C2B29] hover:text-[#F6F4ED] dark:hover:bg-[#43434B]"
+                className="w-full px-3 py-1.5 text-left text-xs font-retro-mono flex items-center gap-2 hover:bg-[#2C2B29] hover:text-[#F6F4ED] dark:hover:bg-[#43434B] cursor-pointer"
               >
                 <Folder className="w-3 h-3 text-[#E8C547]" /> Move to Folder...
               </button>
@@ -222,7 +155,7 @@ export const CartridgeItem: React.FC<CartridgeItemProps> = ({
                   setMenuOpen(false);
                   onDelete(cartridge);
                 }}
-                className="w-full px-3 py-1.5 text-left text-xs font-retro-mono text-red-600 dark:text-red-400 flex items-center gap-2 hover:bg-red-600 hover:text-white"
+                className="w-full px-3 py-1.5 text-left text-xs font-retro-mono text-red-600 dark:text-red-400 flex items-center gap-2 hover:bg-red-600 hover:text-white cursor-pointer"
               >
                 <Trash2 className="w-3 h-3" /> Delete
               </button>

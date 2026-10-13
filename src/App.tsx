@@ -27,6 +27,12 @@ import {
   importCartridgeFromFile,
   duplicateAsEditable,
 } from './services/sharing';
+import {
+  CartridgeAnimationOverlay,
+  type DragCartridgeState,
+  type InsertingCartridgeState,
+  type ReturningCartridgeState,
+} from './components/Shelf/CartridgeAnimationOverlay';
 
 export const App: React.FC = () => {
   const [cartridges, setCartridges] = useState<Cartridge[]>([]);
@@ -114,16 +120,176 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
+  // Cartridge Drag & Insertion Animation states
+  const [dragState, setDragState] = useState<DragCartridgeState | null>(null);
+  const [insertingState, setInsertingState] = useState<InsertingCartridgeState | null>(null);
+  const [returningState, setReturningState] = useState<ReturningCartridgeState | null>(null);
+  const dragSessionRef = useRef<{
+    cartridge: Cartridge;
+    originRect: DOMRect;
+    startPointer: { x: number; y: number };
+    currentPointer: { x: number; y: number };
+    hasMoved: boolean;
+  } | null>(null);
+
   const loadedCartridge =
     cartridges.find((c) => c.id === loadedCartridgeId) || null;
 
-  // Insert Cartridge into console
-  const handleSelectCartridge = useCallback((cartridge: Cartridge) => {
-    sound.playClunk();
-    setLoadedCartridgeId(cartridge.id);
-    setIsSlotHovered(false);
-    showToast(`Loaded ${cartridge.label} into console`);
+  const draggingCartridgeId =
+    dragState?.cartridge.id || insertingState?.cartridge.id || null;
+
+  // Start the physical animation where the cartridge flies and inserts into the slot
+  const startInsertionAnimation = useCallback(
+    (cartridge: Cartridge, fromX: number, fromY: number) => {
+      sound.playWhirr();
+      const slotEl = document.getElementById('cartridge-slot');
+      if (!slotEl) {
+        sound.playClunk();
+        setLoadedCartridgeId(cartridge.id);
+        return;
+      }
+      const targetSlotRect = slotEl.getBoundingClientRect();
+      setInsertingState({
+        cartridge,
+        fromX,
+        fromY,
+        targetSlotRect,
+      });
+    },
+    []
+  );
+
+  const handleInsertComplete = useCallback(() => {
+    if (insertingState) {
+      setLoadedCartridgeId(insertingState.cartridge.id);
+      showToast(`Loaded ${insertingState.cartridge.label} into console`);
+      setInsertingState(null);
+    }
+  }, [insertingState]);
+
+  const handleReturnComplete = useCallback(() => {
+    setReturningState(null);
   }, []);
+
+  // Insert Cartridge into console (with slot animation)
+  const handleSelectCartridge = useCallback(
+    (cartridge: Cartridge, originRect?: DOMRect) => {
+      if (insertingState || dragState) return;
+      const startX = originRect
+        ? originRect.left + originRect.width / 2
+        : window.innerWidth / 2;
+      const startY = originRect
+        ? originRect.top + originRect.height / 2
+        : window.innerHeight - 150;
+      startInsertionAnimation(cartridge, startX, startY);
+    },
+    [insertingState, dragState, startInsertionAnimation]
+  );
+
+  // Pointer drag coordinator (drag without being cut off by scroll overflow containers)
+  const handlePointerDragStartCartridge = useCallback(
+    (cartridge: Cartridge, originRect: DOMRect, clientX: number, clientY: number) => {
+      if (insertingState) return;
+
+      dragSessionRef.current = {
+        cartridge,
+        originRect,
+        startPointer: { x: clientX, y: clientY },
+        currentPointer: { x: clientX, y: clientY },
+        hasMoved: false,
+      };
+
+      const handlePointerMove = (e: PointerEvent) => {
+        if (!dragSessionRef.current) return;
+        const { startPointer, cartridge, originRect } = dragSessionRef.current;
+        const dx = e.clientX - startPointer.x;
+        const dy = e.clientY - startPointer.y;
+
+        if (!dragSessionRef.current.hasMoved) {
+          if (Math.hypot(dx, dy) > 6) {
+            dragSessionRef.current.hasMoved = true;
+            sound.playWhirr();
+          } else {
+            return;
+          }
+        }
+
+        dragSessionRef.current.currentPointer = { x: e.clientX, y: e.clientY };
+
+        // Check if cursor is hovering over/near the console slot
+        const slotEl = document.getElementById('cartridge-slot');
+        let isNear = false;
+        if (slotEl) {
+          const slotRect = slotEl.getBoundingClientRect();
+          isNear =
+            e.clientY < slotRect.bottom + 80 &&
+            e.clientY > slotRect.top - 120 &&
+            e.clientX > slotRect.left - 60 &&
+            e.clientX < slotRect.right + 60;
+        }
+
+        setIsSlotHovered(isNear);
+        setDragState({
+          cartridge,
+          pointerX: e.clientX,
+          pointerY: e.clientY,
+          originRect,
+          isNearSlot: isNear,
+        });
+      };
+
+      const handlePointerUp = (e: PointerEvent) => {
+        window.removeEventListener('pointermove', handlePointerMove);
+        window.removeEventListener('pointerup', handlePointerUp);
+        window.removeEventListener('pointercancel', handlePointerUp);
+
+        if (!dragSessionRef.current) return;
+        const session = dragSessionRef.current;
+        dragSessionRef.current = null;
+        setDragState(null);
+        setIsSlotHovered(false);
+
+        if (!session.hasMoved) {
+          // Tap / click! Animate from shelf to slot
+          startInsertionAnimation(
+            session.cartridge,
+            session.originRect.left + session.originRect.width / 2,
+            session.originRect.top + session.originRect.height / 2
+          );
+        } else {
+          // Dragged! Check if dropped over slot
+          const slotEl = document.getElementById('cartridge-slot');
+          let droppedInSlot = false;
+          if (slotEl) {
+            const slotRect = slotEl.getBoundingClientRect();
+            droppedInSlot =
+              e.clientY < slotRect.bottom + 80 &&
+              e.clientY > slotRect.top - 120 &&
+              e.clientX > slotRect.left - 60 &&
+              e.clientX < slotRect.right + 60;
+          }
+
+          if (droppedInSlot || e.clientY < window.innerHeight * 0.55) {
+            // Drop successful! Animate into slot from drop position
+            startInsertionAnimation(session.cartridge, e.clientX, e.clientY);
+          } else {
+            // Drop canceled: smooth return animation to shelf position
+            setReturningState({
+              cartridge: session.cartridge,
+              currentX: e.clientX,
+              currentY: e.clientY,
+              targetRect: session.originRect,
+            });
+          }
+        }
+      };
+
+      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerup', handlePointerUp);
+      window.addEventListener('pointercancel', handlePointerUp);
+    },
+    [insertingState, startInsertionAnimation]
+  );
 
   // Eject Cartridge from console
   const handleEject = useCallback(() => {
@@ -520,13 +686,8 @@ export const App: React.FC = () => {
           onEditCartridge={handleEditCartridge}
           onShareCartridge={handleShareCartridge}
           onDeleteCartridge={handleDeleteCartridge}
-          onDragStartCartridge={() => setIsSlotHovered(true)}
-          onDragEndCartridge={(_, dropSuccess) => {
-            setIsSlotHovered(false);
-            if (dropSuccess) {
-              sound.playClunk();
-            }
-          }}
+          onPointerDragStartCartridge={handlePointerDragStartCartridge}
+          draggingCartridgeId={draggingCartridgeId}
           reducedMotion={settings.reducedMotion}
         />
       </footer>
@@ -624,6 +785,15 @@ export const App: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* 11. Cartridge Drag & Insertion Animation Overlay (Uncut & Smooth) */}
+      <CartridgeAnimationOverlay
+        dragState={dragState}
+        insertingState={insertingState}
+        returningState={returningState}
+        onInsertComplete={handleInsertComplete}
+        onReturnComplete={handleReturnComplete}
+      />
     </div>
   );
 };
