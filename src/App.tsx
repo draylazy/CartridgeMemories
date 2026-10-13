@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import type { Cartridge, AppSettings } from './types';
+import type { Cartridge, AppSettings, CartridgeFolder } from './types';
 import { MacConsole } from './components/Console/MacConsole';
 import { CartridgeShelf } from './components/Shelf/CartridgeShelf';
 import { CRTPlayer } from './components/CRTPlayer/CRTPlayer';
 import { CartridgeModal } from './components/Editor/CartridgeModal';
 import { ShareCartridgeModal } from './components/Share/ShareCartridgeModal';
 import { FloatingControls } from './components/Controls/FloatingControls';
+import { FolderModal } from './components/Folder/FolderModal';
+import { AssignFolderModal } from './components/Folder/AssignFolderModal';
 import {
   loadAllCartridges,
   saveCartridge,
@@ -15,6 +17,8 @@ import {
   loadSettings,
   saveSettings,
   clearAllCartridges,
+  loadFolders,
+  saveFolders,
 } from './services/db';
 import { populateDemoContent, createDefaultCartridges } from './services/demoData';
 import { sound } from './services/audio';
@@ -29,6 +33,13 @@ export const App: React.FC = () => {
   const [loadedCartridgeId, setLoadedCartridgeId] = useState<string | null>(null);
   const [isPlayingSlideshow, setIsPlayingSlideshow] = useState(false);
   const [isSlotHovered, setIsSlotHovered] = useState(false);
+
+  // Storage Folders
+  const [folders, setFolders] = useState<CartridgeFolder[]>(() => loadFolders());
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+  const [editingFolder, setEditingFolder] = useState<CartridgeFolder | null>(null);
+  const [movingCartridge, setMovingCartridge] = useState<Cartridge | null>(null);
 
   // Settings
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
@@ -272,6 +283,66 @@ export const App: React.FC = () => {
     }
   }, []);
 
+  // Save / Update Folder
+  const handleSaveFolder = useCallback((folder: CartridgeFolder) => {
+    setFolders((prev) => {
+      const existsIndex = prev.findIndex((f) => f.id === folder.id);
+      let updated: CartridgeFolder[];
+      if (existsIndex >= 0) {
+        updated = [...prev];
+        updated[existsIndex] = folder;
+      } else {
+        updated = [...prev, folder];
+      }
+      saveFolders(updated);
+      return updated;
+    });
+    setSelectedFolderId(folder.id);
+    showToast(`Storage Folder "${folder.name}" saved!`);
+  }, []);
+
+  // Delete Folder (cartridges return safely to main shelf)
+  const handleDeleteFolder = useCallback((folderId: string) => {
+    setFolders((prev) => {
+      const updated = prev.filter((f) => f.id !== folderId);
+      saveFolders(updated);
+      return updated;
+    });
+    if (selectedFolderId === folderId) {
+      setSelectedFolderId(null);
+    }
+    setCartridges((prev) => {
+      const updated = prev.map((c) =>
+        c.folderId === folderId ? { ...c, folderId: undefined } : c
+      );
+      saveAllCartridges(updated);
+      return updated;
+    });
+    showToast('Folder deleted. Cartridges returned to main shelf.');
+  }, [selectedFolderId]);
+
+  // Move Cartridge into a Folder or back to Main Shelf
+  const handleMoveCartridgeToFolder = useCallback(
+    async (cartridgeId: string, folderId: string | undefined) => {
+      const targetCartridge = cartridges.find((c) => c.id === cartridgeId);
+      if (!targetCartridge) return;
+
+      const updated = { ...targetCartridge, folderId: folderId || undefined };
+      await saveCartridge(updated);
+      setCartridges((prev) =>
+        prev.map((c) => (c.id === cartridgeId ? updated : c))
+      );
+
+      const targetFolder = folders.find((f) => f.id === folderId);
+      if (targetFolder) {
+        showToast(`Moved "${targetCartridge.label}" to "${targetFolder.name}"`);
+      } else {
+        showToast(`Moved "${targetCartridge.label}" to Main Shelf`);
+      }
+    },
+    [cartridges, folders]
+  );
+
   // Menu bar actions
   const handleMenuAction = useCallback(
     (action: string) => {
@@ -286,6 +357,10 @@ export const App: React.FC = () => {
           break;
         case 'new':
           handleNewCartridge();
+          break;
+        case 'new_folder':
+          setEditingFolder(null);
+          setIsFolderModalOpen(true);
           break;
         case 'import_file':
           if (fileImportInputRef.current) {
@@ -427,6 +502,18 @@ export const App: React.FC = () => {
         <CartridgeShelf
           cartridges={cartridges}
           activeCartridge={loadedCartridge}
+          folders={folders}
+          selectedFolderId={selectedFolderId}
+          onSelectFolder={setSelectedFolderId}
+          onNewFolder={() => {
+            setEditingFolder(null);
+            setIsFolderModalOpen(true);
+          }}
+          onEditFolder={(f) => {
+            setEditingFolder(f);
+            setIsFolderModalOpen(true);
+          }}
+          onMoveToFolder={(c) => setMovingCartridge(c)}
           onSelectCartridge={handleSelectCartridge}
           onNewCartridge={handleNewCartridge}
           onOpenImport={() => fileImportInputRef.current?.click()}
@@ -462,6 +549,8 @@ export const App: React.FC = () => {
         {isModalOpen && (
           <CartridgeModal
             initialCartridge={editingCartridge}
+            folders={folders}
+            defaultFolderId={selectedFolderId || undefined}
             onSave={handleSaveCartridge}
             onClose={() => setIsModalOpen(false)}
             onDelete={
@@ -484,16 +573,47 @@ export const App: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* 7. Floating Round Controls (Sound, Dark Mode, Demo) */}
+      {/* 7. Create / Edit Storage Folder Modal */}
+      <AnimatePresence>
+        {isFolderModalOpen && (
+          <FolderModal
+            initialFolder={editingFolder}
+            onSave={handleSaveFolder}
+            onClose={() => {
+              setIsFolderModalOpen(false);
+              setEditingFolder(null);
+            }}
+            onDelete={handleDeleteFolder}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* 8. Move Cartridge into Folder Modal */}
+      <AnimatePresence>
+        {movingCartridge && (
+          <AssignFolderModal
+            cartridge={movingCartridge}
+            folders={folders}
+            onSelectFolder={handleMoveCartridgeToFolder}
+            onNewFolder={() => {
+              setMovingCartridge(null);
+              setEditingFolder(null);
+              setIsFolderModalOpen(true);
+            }}
+            onClose={() => setMovingCartridge(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* 9. Floating Round Controls (Sound, Dark Mode) */}
       <FloatingControls
         darkMode={settings.darkMode}
         onToggleDarkMode={handleToggleDarkMode}
         soundEnabled={settings.soundEnabled}
         onToggleSound={handleToggleSound}
-        onLoadDemoData={handleLoadDemoData}
       />
 
-      {/* 8. Retro Toast Notification */}
+      {/* 10. Retro Toast Notification */}
       <AnimatePresence>
         {toastMessage && (
           <div className="fixed bottom-6 left-6 z-50 pointer-events-none">

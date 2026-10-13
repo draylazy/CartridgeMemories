@@ -1,14 +1,16 @@
 import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { PRESET_CARTRIDGE_COLORS } from '../../types';
-import type { Cartridge, CartridgeType, MemoryItem } from '../../types';
+import type { Cartridge, CartridgeType, MemoryItem, CartridgeFolder } from '../../types';
 import { MacWindowHeader } from '../Common/MacWindowHeader';
-import { extractDateFromFile, readFileAsDataURL } from '../../services/exif';
+import { extractDateFromFile, readFileAsDataURL, sortMemoryItemsByDate, formatDateToYMD } from '../../services/exif';
 import { sound } from '../../services/audio';
-import { Upload, Plus, Trash2, ArrowUp, ArrowDown, Image, FileText, Layers, Check } from 'lucide-react';
+import { Upload, Plus, Trash2, ArrowUp, ArrowDown, Image, FileText, Layers, Check, Folder } from 'lucide-react';
 
 interface CartridgeModalProps {
   initialCartridge?: Cartridge | null;
+  folders?: CartridgeFolder[];
+  defaultFolderId?: string;
   onSave: (cartridge: Cartridge) => void;
   onClose: () => void;
   onDelete?: (id: string) => void;
@@ -16,6 +18,8 @@ interface CartridgeModalProps {
 
 export const CartridgeModal: React.FC<CartridgeModalProps> = ({
   initialCartridge,
+  folders = [],
+  defaultFolderId,
   onSave,
   onClose,
   onDelete,
@@ -35,28 +39,58 @@ export const CartridgeModal: React.FC<CartridgeModalProps> = ({
   const [color, setColor] = useState(
     initialCartridge?.color || PRESET_CARTRIDGE_COLORS[0].hex
   );
+  const [folderId, setFolderId] = useState<string | undefined>(
+    initialCartridge?.folderId ?? defaultFolderId
+  );
   const [items, setItems] = useState<MemoryItem[]>(
-    initialCartridge?.items ? [...initialCartridge.items] : []
+    initialCartridge?.items ? sortMemoryItemsByDate(initialCartridge.items) : []
   );
 
   // New Note fields for NOTES mode
   const [newNoteText, setNewNoteText] = useState('');
   const [newNoteDate, setNewNoteDate] = useState(
-    new Date().toISOString().split('T')[0]
+    formatDateToYMD(new Date())
   );
+  const [uploadWarning, setUploadWarning] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Handle multi-image upload
+  const MAX_PICTURES = 15;
+  const currentPictureCount = items.filter((it) => !!it.imageUrl).length;
+
+  // Handle multi-image upload with 15-picture limit
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+    const rawFiles = e.target.files;
+    if (!rawFiles || rawFiles.length === 0) return;
+
+    const currentPics = items.filter((it) => !!it.imageUrl).length;
+    const availableSlots = MAX_PICTURES - currentPics;
+
+    if (availableSlots <= 0) {
+      sound.playBeep();
+      setUploadWarning(`Maximum limit of ${MAX_PICTURES} pictures reached.`);
+      setTimeout(() => setUploadWarning(null), 4000);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    let filesToProcess = Array.from(rawFiles);
+    if (filesToProcess.length > availableSlots) {
+      sound.playBeep();
+      setUploadWarning(
+        `Added first ${availableSlots} picture${availableSlots === 1 ? '' : 's'}. Maximum limit is ${MAX_PICTURES} pictures per cartridge.`
+      );
+      setTimeout(() => setUploadWarning(null), 5000);
+      filesToProcess = filesToProcess.slice(0, availableSlots);
+    } else {
+      setUploadWarning(null);
+    }
 
     sound.playWhirr();
 
     const newItems: MemoryItem[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    for (let i = 0; i < filesToProcess.length; i++) {
+      const file = filesToProcess[i];
       try {
         const [dateStr, dataUrl] = await Promise.all([
           extractDateFromFile(file),
@@ -75,8 +109,14 @@ export const CartridgeModal: React.FC<CartridgeModalProps> = ({
       }
     }
 
-    setItems((prev) => [...prev, ...newItems]);
+    // Auto-sort chronologically based on extracted photo dates (1 first to 30 last)
+    setItems((prev) => sortByDate([...prev, ...newItems]));
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Helper to auto-sort items chronologically by date (1 first to 30 last)
+  const sortByDate = (list: MemoryItem[]): MemoryItem[] => {
+    return sortMemoryItemsByDate(list);
   };
 
   // Add a text note item
@@ -91,7 +131,7 @@ export const CartridgeModal: React.FC<CartridgeModalProps> = ({
       date: newNoteDate,
     };
 
-    setItems((prev) => [...prev, newItem]);
+    setItems((prev) => sortByDate([...prev, newItem]));
     setNewNoteText('');
   };
 
@@ -115,7 +155,7 @@ export const CartridgeModal: React.FC<CartridgeModalProps> = ({
 
   const updateItemDate = (id: string, date: string) => {
     setItems((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, date } : it))
+      sortByDate(prev.map((it) => (it.id === id ? { ...it, date } : it)))
     );
   };
 
@@ -135,9 +175,10 @@ export const CartridgeModal: React.FC<CartridgeModalProps> = ({
       label: label.trim().toUpperCase() || 'CUSTOM',
       type,
       color,
-      items,
+      items: sortByDate(items),
       createdAt: initialCartridge?.createdAt || Date.now(),
       updatedAt: Date.now(),
+      folderId: folderId || undefined,
     };
 
     onSave(cartridge);
@@ -187,6 +228,28 @@ export const CartridgeModal: React.FC<CartridgeModalProps> = ({
               />
             </div>
           </div>
+
+          {/* Storage Folder Selection */}
+          {folders.length > 0 && (
+            <div className="space-y-1">
+              <label className="font-silkscreen text-[10px] uppercase tracking-wider flex items-center gap-1.5">
+                <Folder className="w-3.5 h-3.5 text-[#87977A]" />
+                <span>Storage Folder / Case</span>
+              </label>
+              <select
+                value={folderId || ''}
+                onChange={(e) => setFolderId(e.target.value || undefined)}
+                className="w-full px-3 py-2 bg-white dark:bg-[#1E1E20] border-2 border-[#2C2B29]/70 dark:border-neutral-600 rounded text-xs focus:outline-none focus:ring-2 focus:ring-[#87977A] font-silkscreen text-[10px]"
+              >
+                <option value="">📂 MAIN SHELF (NO FOLDER)</option>
+                {folders.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    📁 {f.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Type Selector: Pictures / Notes / Pictures + Notes */}
           <div className="space-y-1.5">
@@ -281,9 +344,27 @@ export const CartridgeModal: React.FC<CartridgeModalProps> = ({
           {/* Content Manager: upload images or add notes */}
           <div className="border-t-2 border-[#2C2B29]/20 pt-4 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="font-silkscreen text-[10px] uppercase tracking-wider">
-                Memory Items ({items.length})
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="font-silkscreen text-[10px] uppercase tracking-wider">
+                  Memory Items ({items.length})
+                </span>
+                {(type === 'PICTURES' || type === 'PICTURES_NOTES') && (
+                  <span
+                    className={`text-[9px] font-silkscreen px-1.5 py-0.5 rounded ${
+                      currentPictureCount >= MAX_PICTURES
+                        ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400 font-bold'
+                        : 'bg-black/5 dark:bg-white/10 text-neutral-500'
+                    }`}
+                  >
+                    {currentPictureCount}/{MAX_PICTURES} PHOTOS
+                  </span>
+                )}
+                {items.length > 1 && (
+                  <span className="text-[9px] font-silkscreen px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                    AUTO-SORTED BY DATE
+                  </span>
+                )}
+              </div>
               {(type === 'PICTURES' || type === 'PICTURES_NOTES') && (
                 <div>
                   <input
@@ -291,20 +372,42 @@ export const CartridgeModal: React.FC<CartridgeModalProps> = ({
                     type="file"
                     multiple
                     accept="image/*"
+                    disabled={currentPictureCount >= MAX_PICTURES}
                     onChange={handleFileUpload}
                     className="hidden"
                     id="photo-upload-input"
                   />
                   <label
-                    htmlFor="photo-upload-input"
-                    className="px-3 py-1.5 bg-[#2C2B29] text-[#F6F4ED] rounded font-silkscreen text-[9px] hover:bg-[#43423F] cursor-pointer inline-flex items-center gap-1.5 shadow-[2px_2px_0_#000] active:translate-y-0.5"
+                    htmlFor={currentPictureCount >= MAX_PICTURES ? undefined : 'photo-upload-input'}
+                    onClick={() => {
+                      if (currentPictureCount >= MAX_PICTURES) {
+                        sound.playBeep();
+                        setUploadWarning(`Cartridge full: maximum limit of ${MAX_PICTURES} pictures reached.`);
+                        setTimeout(() => setUploadWarning(null), 4000);
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded font-silkscreen text-[9px] inline-flex items-center gap-1.5 shadow-[2px_2px_0_#000] transition-all select-none ${
+                      currentPictureCount >= MAX_PICTURES
+                        ? 'bg-neutral-300 dark:bg-neutral-700 text-neutral-500 cursor-not-allowed opacity-75'
+                        : 'bg-[#2C2B29] text-[#F6F4ED] hover:bg-[#43423F] cursor-pointer active:translate-y-0.5'
+                    }`}
                   >
                     <Upload className="w-3 h-3" />
-                    UPLOAD PHOTOS
+                    {currentPictureCount >= MAX_PICTURES
+                      ? `MAX PHOTOS (${MAX_PICTURES}/${MAX_PICTURES})`
+                      : `UPLOAD PHOTOS (MAX ${MAX_PICTURES})`}
                   </label>
                 </div>
               )}
             </div>
+
+            {/* Warning if limit reached */}
+            {uploadWarning && (
+              <div className="p-2.5 bg-amber-500/15 border border-amber-500/40 rounded text-amber-700 dark:text-amber-300 text-[10px] font-silkscreen flex items-center gap-2">
+                <span>⚠️</span>
+                <span>{uploadWarning}</span>
+              </div>
+            )}
 
             {/* Note input for NOTES mode */}
             {type === 'NOTES' && (

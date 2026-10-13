@@ -1,6 +1,6 @@
 import { openDB } from 'idb';
 import type { DBSchema, IDBPDatabase } from 'idb';
-import type { Cartridge, AppSettings } from '../types';
+import type { Cartridge, AppSettings, CartridgeFolder } from '../types';
 import { createDefaultCartridges } from './demoData';
 
 interface CartridgeDBSchema extends DBSchema {
@@ -14,6 +14,7 @@ interface CartridgeDBSchema extends DBSchema {
 const DB_NAME = 'cartridge-memories-db';
 const DB_VERSION = 1;
 const SETTINGS_KEY = 'cartridge_memories_settings';
+const FOLDERS_KEY = 'cartridge_memories_folders';
 
 let dbPromise: Promise<IDBPDatabase<CartridgeDBSchema>> | null = null;
 
@@ -79,6 +80,29 @@ export async function deleteCartridge(id: string): Promise<void> {
 export async function clearAllCartridges(): Promise<void> {
   const db = await getDB();
   await db.clear('cartridges');
+}
+
+// LocalStorage helpers for Folders / Storage Cases
+export function loadFolders(): CartridgeFolder[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(FOLDERS_KEY);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error('Failed to load folders', e);
+  }
+  return [];
+}
+
+export function saveFolders(folders: CartridgeFolder[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(FOLDERS_KEY, JSON.stringify(folders));
+  } catch (e) {
+    console.error('Failed to save folders', e);
+  }
 }
 
 // LocalStorage helpers for Settings only (as required by prompt)

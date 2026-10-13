@@ -9,6 +9,13 @@ export interface MemoryItem {
   caption?: string;
 }
 
+export interface CartridgeFolder {
+  id: string;
+  name: string;
+  color?: string; // Hex color for the folder label / tab
+  createdAt: number;
+}
+
 export interface Cartridge {
   id: string;
   monthIndex: number; // 0-11 for Jan-Dec, or -1 for custom
@@ -22,6 +29,7 @@ export interface Cartridge {
   updatedAt: number;
   isReadOnly?: boolean; // When shared from another user (write-protected ROM)
   sharedBy?: string; // Name or tag of person who sent the cartridge
+  folderId?: string; // ID of the storage folder/case this cartridge is placed in
 }
 
 export interface AppSettings {

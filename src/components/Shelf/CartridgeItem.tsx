@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import type { Cartridge } from '../../types';
 import { sound } from '../../services/audio';
-import { MoreVertical, Edit2, Trash2, Image, FileText, Sparkles, Share2, Lock } from 'lucide-react';
+import { MoreVertical, Edit2, Trash2, Image, FileText, Sparkles, Share2, Lock, Folder } from 'lucide-react';
 
 interface CartridgeItemProps {
   cartridge: Cartridge;
@@ -10,6 +10,7 @@ interface CartridgeItemProps {
   onEdit: (cartridge: Cartridge) => void;
   onDelete?: (cartridge: Cartridge) => void;
   onShare?: (cartridge: Cartridge) => void;
+  onMoveToFolder?: (cartridge: Cartridge) => void;
   isDraggingSlot?: boolean;
   onDragStart?: (cartridge: Cartridge) => void;
   onDragEnd?: (cartridge: Cartridge, dropSuccess: boolean) => void;
@@ -22,6 +23,7 @@ export const CartridgeItem: React.FC<CartridgeItemProps> = ({
   onEdit,
   onDelete,
   onShare,
+  onMoveToFolder,
   onDragStart,
   onDragEnd,
   reducedMotion = false,
@@ -91,7 +93,7 @@ export const CartridgeItem: React.FC<CartridgeItemProps> = ({
           cursor: 'grabbing',
           boxShadow: '0 25px 40px -10px rgba(0,0,0,0.35)',
         }}
-        className={`relative w-[56px] sm:w-[64px] h-[155px] sm:h-[175px] rounded-t-lg rounded-b-md cursor-grab active:cursor-grabbing focus:outline-none focus-visible:ring-4 focus-visible:ring-[#87977A] transition-shadow ${
+        className={`relative w-[48px] sm:w-[54px] h-[150px] sm:h-[168px] rounded-t-lg rounded-b-md cursor-grab active:cursor-grabbing focus:outline-none focus-visible:ring-4 focus-visible:ring-[#87977A] transition-shadow ${
           isPointerDragging ? 'z-50' : 'z-10'
         }`}
         style={{
@@ -101,7 +103,7 @@ export const CartridgeItem: React.FC<CartridgeItemProps> = ({
         }}
       >
         {/* Top grip bevel lines (3 lines) */}
-        <div className="pt-1.5 px-2 flex flex-col gap-0.5 items-center">
+        <div className="pt-1.5 px-1.5 flex flex-col gap-0.5 items-center">
           <div className="w-full h-[2.5px] bg-black/25 rounded-full shadow-[0_1px_0_rgba(255,255,255,0.2)]" />
           <div className="w-full h-[2.5px] bg-black/25 rounded-full shadow-[0_1px_0_rgba(255,255,255,0.2)]" />
           <div className="w-full h-[2.5px] bg-black/25 rounded-full shadow-[0_1px_0_rgba(255,255,255,0.2)]" />
@@ -112,10 +114,10 @@ export const CartridgeItem: React.FC<CartridgeItemProps> = ({
         <div className="absolute top-7 -right-[1px] w-[2.5px] h-5 bg-black/20 rounded-l-sm" />
 
         {/* White rounded label sticker with rotated text */}
-        <div className="absolute inset-x-1.5 top-6 bottom-5 bg-[#FCFAF6] dark:bg-[#F2EFE8] rounded-[5px] shadow-[inset_0_1px_2px_rgba(0,0,0,0.15),0_1px_1px_rgba(255,255,255,0.6)] p-1 flex flex-col items-center justify-between border border-black/10 overflow-hidden">
+        <div className="absolute inset-x-1 sm:inset-x-1.5 top-5.5 bottom-4.5 bg-[#FCFAF6] dark:bg-[#F2EFE8] rounded-[4px] shadow-[inset_0_1px_2px_rgba(0,0,0,0.15),0_1px_1px_rgba(255,255,255,0.6)] p-0.5 sm:p-1 flex flex-col items-center justify-between border border-black/10 overflow-hidden">
           {/* Subtle label top header stripe */}
           <div className="w-full flex items-center justify-between px-0.5 border-b border-black/10 pb-0.5">
-            <span className="font-silkscreen text-[6.5px] tracking-tight text-neutral-500 font-semibold flex items-center gap-0.5">
+            <span className="font-silkscreen text-[6px] tracking-tight text-neutral-500 font-semibold flex items-center gap-0.5">
               {cartridge.isReadOnly ? <Lock className="w-2 h-2 text-amber-700" /> : 'ROM'}
             </span>
             {getTypeIcon()}
@@ -124,7 +126,7 @@ export const CartridgeItem: React.FC<CartridgeItemProps> = ({
           {/* Rotated uppercase month text */}
           <div className="flex-1 flex items-center justify-center my-0.5 overflow-hidden">
             <span
-              className="font-silkscreen font-bold tracking-wider text-[10px] sm:text-[11px] text-[#242321] uppercase select-none transform rotate-180"
+              className="font-silkscreen font-bold tracking-wider text-[9px] sm:text-[10px] text-[#242321] uppercase select-none transform rotate-180"
               style={{
                 writingMode: 'vertical-rl',
               }}
@@ -135,7 +137,7 @@ export const CartridgeItem: React.FC<CartridgeItemProps> = ({
 
           {/* Label footer: item count badge */}
           <div className="w-full pt-0.5 border-t border-black/10 flex items-center justify-center">
-            <span className="font-pixel text-[11px] sm:text-[12px] tracking-tight text-neutral-600 font-semibold leading-none">
+            <span className="font-pixel text-[10px] sm:text-[11px] tracking-tight text-neutral-600 font-semibold leading-none">
               {cartridge.items.length > 0 ? `${cartridge.items.length} ITEMS` : 'EMPTY'}
             </span>
           </div>
@@ -197,6 +199,19 @@ export const CartridgeItem: React.FC<CartridgeItemProps> = ({
                 className="w-full px-3 py-1.5 text-left text-xs font-retro-mono flex items-center gap-2 hover:bg-[#2C2B29] hover:text-[#F6F4ED] dark:hover:bg-[#43434B]"
               >
                 <Edit2 className="w-3 h-3" /> Edit Cartridge
+              </button>
+            )}
+            {onMoveToFolder && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen(false);
+                  onMoveToFolder(cartridge);
+                }}
+                className="w-full px-3 py-1.5 text-left text-xs font-retro-mono flex items-center gap-2 hover:bg-[#2C2B29] hover:text-[#F6F4ED] dark:hover:bg-[#43434B]"
+              >
+                <Folder className="w-3 h-3 text-[#E8C547]" /> Move to Folder...
               </button>
             )}
             {onDelete && (

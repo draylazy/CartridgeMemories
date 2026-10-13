@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Cartridge, MemoryItem } from '../../types';
 import { sound } from '../../services/audio';
-import { formatRetroTimestamp } from '../../services/exif';
+import { formatRetroTimestamp, sortMemoryItemsByDate } from '../../services/exif';
 import { Play, Pause, ChevronLeft, ChevronRight, X, Volume2, VolumeX, Gauge } from 'lucide-react';
 
 interface CRTPlayerProps {
@@ -39,7 +39,11 @@ export const CRTPlayer: React.FC<CRTPlayerProps> = ({
   // Slide elapsed time in milliseconds (0 to slideDuration)
   const [slideElapsed, setSlideElapsed] = useState(0);
 
-  const items = cartridge.items;
+  // Auto-sort items chronologically by date (Day 1 first to Day 30 last)
+  const items = useMemo(() => {
+    return sortMemoryItemsByDate(cartridge.items);
+  }, [cartridge.items]);
+
   const currentItem: MemoryItem | undefined = items[currentIndex];
 
   // Boot sequence: play CRT power on hum, then open display
@@ -474,17 +478,8 @@ export const CRTPlayer: React.FC<CRTPlayerProps> = ({
               </button>
             </div>
 
-            {/* Right: Exit / Return to Console */}
-            <button
-              type="button"
-              onClick={() => {
-                sound.playBeep();
-                onExit();
-              }}
-              className="px-3 py-1.5 rounded bg-black/50 border border-white/20 hover:bg-white/10 active:scale-95 transition-all cursor-pointer text-[10px]"
-            >
-              EXIT [ESC]
-            </button>
+            {/* Spacer to keep center playback controls balanced */}
+            <div className="hidden sm:block w-[140px]" />
           </div>
         </div>
       </div>

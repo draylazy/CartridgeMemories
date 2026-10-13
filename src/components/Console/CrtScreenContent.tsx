@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { Cartridge } from '../../types';
 import { Play, PlusCircle, Sparkles, Image, FileText, Layers } from 'lucide-react';
 import { sound } from '../../services/audio';
+import { sortMemoryItemsByDate, formatRetroTimestamp } from '../../services/exif';
 
 interface CrtScreenContentProps {
   cartridge: Cartridge | null;
@@ -123,6 +124,9 @@ export const CrtScreenContent: React.FC<CrtScreenContentProps> = ({
     }
   };
 
+  const sortedItems = useMemo(() => sortMemoryItemsByDate(cartridge.items), [cartridge.items]);
+  const firstItem = sortedItems[0];
+
   return (
     <div className="h-full flex flex-col justify-between p-3 select-none text-[#242D1F]">
       {/* Title & Metadata Header */}
@@ -146,21 +150,21 @@ export const CrtScreenContent: React.FC<CrtScreenContentProps> = ({
 
       {/* Center preview card */}
       <div className="my-auto py-2 flex flex-col items-center text-center">
-        {cartridge.items[0]?.imageUrl ? (
+        {firstItem?.imageUrl ? (
           <div className="w-28 h-16 sm:w-36 sm:h-20 rounded border border-[#242D1F]/50 overflow-hidden relative shadow-inner mb-2 bg-black/10">
             <img
-              src={cartridge.items[0].imageUrl}
+              src={firstItem.imageUrl}
               alt="First memory preview"
               className="w-full h-full object-cover filter contrast-125 sepia-30"
             />
             <div className="absolute bottom-0 inset-x-0 bg-black/60 text-[#B9C29A] font-pixel text-[12px] py-0.5 px-1 flex justify-between">
               <span>TRK: 01</span>
-              <span>{cartridge.items[0].date}</span>
+              <span>{formatRetroTimestamp(firstItem.date)}</span>
             </div>
           </div>
         ) : (
           <div className="w-full max-w-[220px] bg-[#B9C29A]/60 border border-[#242D1F]/40 p-2 rounded text-left font-retro-mono text-[9px] line-clamp-3 mb-2 shadow-inner">
-            "{cartridge.items[0]?.text?.slice(0, 90)}..."
+            "{firstItem?.text?.slice(0, 90)}..."
           </div>
         )}
 

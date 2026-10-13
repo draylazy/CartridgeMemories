@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sun, Moon, Volume2, VolumeX, Sparkles } from 'lucide-react';
+import { Sun, Moon, Volume2, VolumeX } from 'lucide-react';
 import { sound } from '../../services/audio';
 
 interface FloatingControlsProps {
@@ -7,7 +7,7 @@ interface FloatingControlsProps {
   onToggleDarkMode: () => void;
   soundEnabled: boolean;
   onToggleSound: () => void;
-  onLoadDemoData: () => void;
+  onLoadDemoData?: () => void;
 }
 
 export const FloatingControls: React.FC<FloatingControlsProps> = ({
@@ -15,23 +15,9 @@ export const FloatingControls: React.FC<FloatingControlsProps> = ({
   onToggleDarkMode,
   soundEnabled,
   onToggleSound,
-  onLoadDemoData,
 }) => {
   return (
     <aside aria-label="Floating Controls" className="fixed bottom-5 right-5 z-40 flex items-center gap-2.5">
-      {/* Quick Load Demo Button */}
-      <button
-        type="button"
-        onClick={() => {
-          sound.playBeep();
-          onLoadDemoData();
-        }}
-        title="Load Demo Memories"
-        aria-label="Load Demo Memories"
-        className="w-10 h-10 rounded-full bg-[#EAE8E0] dark:bg-[#2C2C2E] border-2 border-[#2C2B29] dark:border-[#545459] text-[#2C2B29] dark:text-[#E2E0D8] shadow-[2px_2px_0px_rgba(0,0,0,0.3)] hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer group"
-      >
-        <Sparkles className="w-4 h-4 group-hover:rotate-12 transition-transform text-amber-500" />
-      </button>
 
       {/* Sound Toggle Button (default off until user taps) */}
       <button

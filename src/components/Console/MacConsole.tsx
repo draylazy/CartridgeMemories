@@ -153,6 +153,13 @@ export const MacConsole: React.FC<MacConsoleProps> = ({
                         </button>
                         <button
                           type="button"
+                          onClick={() => handleAction('new_folder')}
+                          className="w-full text-left px-3 py-1 hover:bg-[#242D1F] hover:text-[#E8E6DF]"
+                        >
+                          New Storage Folder (📁)...
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => handleAction('import_file')}
                           className="w-full text-left px-3 py-1 hover:bg-[#242D1F] hover:text-[#E8E6DF]"
                         >
