@@ -52,6 +52,7 @@ export const CartridgeModal: React.FC<CartridgeModalProps> = ({
     formatDateToYMD(new Date())
   );
   const [uploadWarning, setUploadWarning] = useState<string | null>(null);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -538,18 +539,41 @@ export const CartridgeModal: React.FC<CartridgeModalProps> = ({
         <div className="p-3 sm:p-4 bg-[#E8E6DF] dark:bg-[#232325] border-t-2 border-[#2C2B29]/70 flex items-center justify-between">
           <div>
             {isEditing && onDelete && (
-              <button
-                type="button"
-                onClick={() => {
-                  sound.playBeep();
-                  if (confirm(`Delete cartridge "${title}"?`)) {
-                    onDelete(initialCartridge.id);
-                  }
-                }}
-                className="px-3 py-1.5 text-red-600 hover:underline font-silkscreen text-[9px] cursor-pointer"
-              >
-                DELETE CARTRIDGE
-              </button>
+              showConfirmDelete ? (
+                <div className="flex items-center gap-1.5 p-1 bg-red-500/10 dark:bg-red-950/30 border border-red-500/30 rounded">
+                  <span className="text-[9px] font-silkscreen text-red-600 dark:text-red-400 font-bold px-1">
+                    CONFIRM DELETE?
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playClunk();
+                      onDelete(initialCartridge.id);
+                    }}
+                    className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-silkscreen text-[9px] rounded cursor-pointer shadow-xs active:scale-95"
+                  >
+                    YES, DELETE
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmDelete(false)}
+                    className="px-2 py-1 bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 font-silkscreen text-[9px] rounded cursor-pointer"
+                  >
+                    CANCEL
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.playBeep();
+                    setShowConfirmDelete(true);
+                  }}
+                  className="px-3 py-1.5 text-red-600 hover:underline font-silkscreen text-[9px] cursor-pointer"
+                >
+                  DELETE CARTRIDGE
+                </button>
+              )
             )}
           </div>
           <div className="flex items-center gap-2">

@@ -7,6 +7,7 @@ interface FloatingControlsProps {
   onToggleDarkMode: () => void;
   soundEnabled: boolean;
   onToggleSound: () => void;
+  onOpenHowToUse?: () => void;
   onLoadDemoData?: () => void;
 }
 
@@ -15,9 +16,25 @@ export const FloatingControls: React.FC<FloatingControlsProps> = ({
   onToggleDarkMode,
   soundEnabled,
   onToggleSound,
+  onOpenHowToUse,
 }) => {
   return (
-    <aside aria-label="Floating Controls" className="fixed bottom-5 right-5 z-40 flex items-center gap-2.5">
+    <aside aria-label="Floating Controls" className="fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-40 flex items-center gap-2 sm:gap-2.5">
+      {/* How To Use Button */}
+      {onOpenHowToUse && (
+        <button
+          type="button"
+          onClick={() => {
+            sound.playBeep();
+            onOpenHowToUse();
+          }}
+          title="How to Use / Guide"
+          aria-label="How to Use / Guide"
+          className="w-10 h-10 rounded-full bg-[#EAE8E0] dark:bg-[#2C2C2E] border-2 border-[#2C2B29] dark:border-[#545459] text-[#2C2B29] dark:text-[#E2E0D8] shadow-[2px_2px_0px_rgba(0,0,0,0.3)] hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer font-silkscreen text-xs font-bold"
+        >
+          ?
+        </button>
+      )}
 
       {/* Sound Toggle Button (default off until user taps) */}
       <button

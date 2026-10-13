@@ -30,6 +30,7 @@ export const FolderModal: React.FC<FolderModalProps> = ({
   const isEditing = !!initialFolder;
   const [name, setName] = useState(initialFolder?.name || '');
   const [color, setColor] = useState(initialFolder?.color || FOLDER_COLORS[0].hex);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,21 +121,44 @@ export const FolderModal: React.FC<FolderModalProps> = ({
           </div>
 
           {/* Actions */}
-          <div className="pt-3 border-t border-[#2C2B29]/20 flex items-center justify-between">
+          <div className="pt-3 border-t border-[#2C2B29]/20 flex items-center justify-between gap-2 flex-wrap">
             {isEditing && onDelete ? (
-              <button
-                type="button"
-                onClick={() => {
-                  sound.playBeep();
-                  if (confirm(`Delete folder "${initialFolder.name}"? Cartridges will safely return to the main shelf.`)) {
-                    onDelete(initialFolder.id);
-                    onClose();
-                  }
-                }}
-                className="px-3 py-1.5 text-red-600 dark:text-red-400 font-silkscreen text-[9px] hover:underline flex items-center gap-1 cursor-pointer"
-              >
-                <Trash2 className="w-3 h-3" /> DELETE
-              </button>
+              showConfirmDelete ? (
+                <div className="flex items-center gap-1.5 p-1 bg-red-500/10 dark:bg-red-950/30 border border-red-500/30 rounded">
+                  <span className="text-[9px] font-silkscreen text-red-600 dark:text-red-400 font-bold px-1">
+                    DELETE FOLDER & ALL CARTRIDGES?
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playClunk();
+                      onDelete(initialFolder.id);
+                      onClose();
+                    }}
+                    className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-silkscreen text-[9px] rounded cursor-pointer shadow-xs active:scale-95 whitespace-nowrap"
+                  >
+                    YES, DELETE ALL
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmDelete(false)}
+                    className="px-2 py-1 bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 font-silkscreen text-[9px] rounded cursor-pointer"
+                  >
+                    CANCEL
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.playBeep();
+                    setShowConfirmDelete(true);
+                  }}
+                  className="px-3 py-1.5 text-red-600 dark:text-red-400 font-silkscreen text-[9px] hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> DELETE
+                </button>
+              )
             ) : (
               <div />
             )}

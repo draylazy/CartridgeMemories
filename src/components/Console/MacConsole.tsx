@@ -49,7 +49,7 @@ export const MacConsole: React.FC<MacConsoleProps> = ({
     <div className="relative flex flex-col items-center select-none">
       {/* Console Main Body: Classic Compact-Mac beige/cream chassis */}
       <div
-        className="relative w-[340px] sm:w-[460px] md:w-[490px] rounded-[28px] sm:rounded-[36px] p-5 sm:p-7 transition-colors duration-300"
+        className="relative w-full max-w-[340px] sm:max-w-[460px] md:max-w-[490px] rounded-[24px] sm:rounded-[36px] p-4 sm:p-7 transition-colors duration-300"
         style={{
           backgroundColor: 'var(--console-beige)',
           boxShadow:

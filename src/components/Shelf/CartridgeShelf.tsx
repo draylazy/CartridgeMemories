@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Cartridge, CartridgeFolder } from '../../types';
 import { CartridgeItem } from './CartridgeItem';
-import { Plus, ChevronLeft, ChevronRight, FolderOpen, Folder, FolderPlus, Archive, Settings } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Folder, FolderPlus, Archive, Settings } from 'lucide-react';
 import { sound } from '../../services/audio';
 
 interface CartridgeShelfProps {
@@ -15,7 +15,6 @@ interface CartridgeShelfProps {
   onEditFolder?: (folder: CartridgeFolder) => void;
   onSelectCartridge: (cartridge: Cartridge, originRect?: DOMRect) => void;
   onNewCartridge: () => void;
-  onOpenImport?: () => void;
   onEditCartridge: (cartridge: Cartridge) => void;
   onDeleteCartridge: (cartridge: Cartridge) => void;
   onShareCartridge?: (cartridge: Cartridge) => void;
@@ -40,7 +39,6 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
   onEditFolder,
   onSelectCartridge,
   onNewCartridge,
-  onOpenImport,
   onEditCartridge,
   onDeleteCartridge,
   onShareCartridge,
@@ -134,10 +132,10 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
   const activeFolder = folders.find((f) => f.id === selectedFolderId);
 
   return (
-    <div className="relative w-full max-w-5xl mx-auto px-4 mt-6 mb-16">
+    <div className="relative w-full max-w-5xl mx-auto px-2 sm:px-4 mt-6 mb-16">
       {/* 1. Storage Folders / Cases Navigation Bar */}
-      <div className="flex items-center justify-between mb-2 px-1 gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full scrollbar-none">
+      <div className="flex items-center justify-between mb-2 px-0.5 sm:px-1 gap-2 w-full">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 w-full no-scrollbar scroll-smooth flex-nowrap -mx-0.5 px-0.5">
           {/* Main Shelf / All Cartridges Tab */}
           <button
             type="button"
@@ -145,14 +143,14 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
               sound.playBeep();
               onSelectFolder(null);
             }}
-            className={`px-3 py-1.5 rounded-t-md font-silkscreen text-[9px] sm:text-[10px] flex items-center gap-1.5 transition-all cursor-pointer border-t-2 border-x-2 ${
+            className={`shrink-0 whitespace-nowrap px-2.5 sm:px-3 py-1.5 rounded-t-md font-silkscreen text-[9px] sm:text-[10px] flex items-center gap-1.5 transition-all cursor-pointer border-t-2 border-x-2 ${
               selectedFolderId === null
                 ? 'bg-[#EAE8E0] dark:bg-[#2C2C2E] border-[#2C2B29] dark:border-[#545459] text-[#2C2B29] dark:text-[#E2E0D8] shadow-sm font-bold -mb-[2px] z-10'
                 : 'bg-neutral-200/60 dark:bg-neutral-800/60 border-transparent text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200'
             }`}
           >
-            <Archive className="w-3.5 h-3.5" />
-            <span>ALL CARTRIDGES ({cartridges.length})</span>
+            <Archive className="w-3.5 h-3.5 shrink-0" />
+            <span>ALL <span className="hidden sm:inline">CARTRIDGES </span>({cartridges.length})</span>
           </button>
 
           {/* User Folders */}
@@ -160,21 +158,21 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
             const count = cartridges.filter((c) => c.folderId === folder.id).length;
             const isSelected = selectedFolderId === folder.id;
             return (
-              <div key={folder.id} className="flex items-center">
+              <div key={folder.id} className="flex items-center shrink-0">
                 <button
                   type="button"
                   onClick={() => {
                     sound.playBeep();
                     onSelectFolder(folder.id);
                   }}
-                  className={`px-3 py-1.5 rounded-t-md font-silkscreen text-[9px] sm:text-[10px] flex items-center gap-1.5 transition-all cursor-pointer border-t-2 border-x-2 ${
+                  className={`shrink-0 whitespace-nowrap px-2.5 sm:px-3 py-1.5 rounded-t-md font-silkscreen text-[9px] sm:text-[10px] flex items-center gap-1.5 transition-all cursor-pointer border-t-2 border-x-2 ${
                     isSelected
                       ? 'bg-[#EAE8E0] dark:bg-[#2C2C2E] border-[#2C2B29] dark:border-[#545459] text-[#2C2B29] dark:text-[#E2E0D8] shadow-sm font-bold -mb-[2px] z-10'
                       : 'bg-neutral-200/60 dark:bg-neutral-800/60 border-transparent text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200'
                   }`}
                 >
                   <div
-                    className="w-2.5 h-2.5 rounded-xs border border-black/30"
+                    className="w-2.5 h-2.5 rounded-xs border border-black/30 shrink-0"
                     style={{ backgroundColor: folder.color || '#E8C547' }}
                   />
                   <span>{folder.name}</span>
@@ -189,7 +187,7 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
                       onEditFolder(folder);
                     }}
                     title="Edit or Delete Folder"
-                    className="p-1 -ml-1 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 cursor-pointer"
+                    className="p-1 -ml-1 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 cursor-pointer shrink-0"
                   >
                     <Settings className="w-3 h-3" />
                   </button>
@@ -206,10 +204,10 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
               onNewFolder();
             }}
             title="Create a new storage folder / case"
-            className="px-2.5 py-1.5 rounded-t-md font-silkscreen text-[9px] flex items-center gap-1 text-[#87977A] hover:text-[#6f7e63] bg-[#87977A]/10 hover:bg-[#87977A]/20 transition-all cursor-pointer border-t-2 border-x-2 border-dashed border-[#87977A]/40"
+            className="shrink-0 whitespace-nowrap px-2.5 py-1.5 rounded-t-md font-silkscreen text-[9px] flex items-center gap-1 text-[#87977A] hover:text-[#6f7e63] bg-[#87977A]/10 hover:bg-[#87977A]/20 transition-all cursor-pointer border-t-2 border-x-2 border-dashed border-[#87977A]/40"
           >
-            <FolderPlus className="w-3.5 h-3.5" />
-            <span>+ NEW FOLDER</span>
+            <FolderPlus className="w-3.5 h-3.5 shrink-0" />
+            <span>+ <span className="hidden sm:inline">NEW </span>FOLDER</span>
           </button>
         </div>
 
@@ -243,8 +241,36 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
           ref={shelfRef}
           className="flex items-end gap-2 sm:gap-2.5 overflow-x-auto pb-4 pt-4 px-3 sm:px-6 scroll-smooth no-scrollbar min-h-[195px]"
         >
+          {/* "+ New Cartridge" Slot FIRST at the START of the shelf */}
+          <motion.div
+            layout
+            whileHover={reducedMotion ? {} : { y: -8 }}
+            whileTap={{ scale: 0.98 }}
+            className="shrink-0 pb-6"
+          >
+            <button
+              type="button"
+              onClick={() => {
+                sound.playBeep();
+                onNewCartridge();
+              }}
+              aria-label="Create new cartridge"
+              className="w-[48px] sm:w-[54px] h-[150px] sm:h-[168px] rounded-t-lg rounded-b-md border-2 border-dashed border-[#87977A]/70 dark:border-[#87977A]/50 hover:border-[#87977A] bg-[#87977A]/10 dark:bg-[#87977A]/10 hover:bg-[#87977A]/20 flex flex-col items-center justify-center gap-1.5 group transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#87977A]"
+            >
+              <div className="w-6 h-6 rounded-full bg-[#87977A] text-white flex items-center justify-center group-hover:scale-110 transition-all shadow-xs">
+                <Plus className="w-3.5 h-3.5" />
+              </div>
+              <span className="font-silkscreen text-[7.5px] text-[#5e7052] dark:text-[#A4B598] font-bold uppercase tracking-wider text-center px-0.5 leading-tight">
+                + NEW
+                <br />
+                ROM
+              </span>
+            </button>
+          </motion.div>
+
+          {/* Empty Folder Message comes AFTER the "+ NEW ROM" slot */}
           {visibleCartridges.length === 0 && selectedFolderId && (
-            <div className="w-full py-10 flex flex-col items-center justify-center text-neutral-400 font-retro-mono text-xs gap-1 select-none">
+            <div className="flex-1 min-w-[220px] py-10 flex flex-col items-center justify-center text-neutral-400 font-retro-mono text-xs gap-1 select-none text-center px-4">
               <Folder className="w-8 h-8 opacity-40 mb-1" />
               <p className="font-silkscreen text-[10px]">THIS FOLDER IS EMPTY</p>
               <p className="text-[10px] text-neutral-500">
@@ -280,60 +306,6 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
               </motion.div>
             ))}
           </AnimatePresence>
-
-          {/* "+ New Cartridge" Slot at the end */}
-          <motion.div
-            layout
-            whileHover={reducedMotion ? {} : { y: -8 }}
-            whileTap={{ scale: 0.98 }}
-            className="shrink-0 pb-6"
-          >
-            <button
-              type="button"
-              onClick={() => {
-                sound.playBeep();
-                onNewCartridge();
-              }}
-              aria-label="Create new cartridge"
-              className="w-[48px] sm:w-[54px] h-[150px] sm:h-[168px] rounded-t-lg rounded-b-md border-2 border-dashed border-neutral-300 dark:border-neutral-700 hover:border-neutral-500 dark:hover:border-neutral-400 bg-neutral-100/50 dark:bg-neutral-800/30 flex flex-col items-center justify-center gap-1.5 group transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-500"
-            >
-              <div className="w-6 h-6 rounded-full bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center text-neutral-500 dark:text-neutral-400 group-hover:bg-neutral-300 dark:group-hover:bg-neutral-600 group-hover:scale-110 transition-all">
-                <Plus className="w-3.5 h-3.5" />
-              </div>
-              <span className="font-silkscreen text-[7.5px] text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-center px-0.5 leading-tight">
-                + NEW
-                <br />
-                ROM
-              </span>
-            </button>
-          </motion.div>
-
-          {/* "Import ROM" Slot */}
-          <motion.div
-            layout
-            whileHover={reducedMotion ? {} : { y: -8 }}
-            whileTap={{ scale: 0.98 }}
-            className="shrink-0 pb-6"
-          >
-            <button
-              type="button"
-              onClick={() => {
-                sound.playBeep();
-                onOpenImport?.();
-              }}
-              aria-label="Import cartridge file"
-              className="w-[48px] sm:w-[54px] h-[150px] sm:h-[168px] rounded-t-lg rounded-b-md border-2 border-dashed border-[#87977A]/50 dark:border-[#87977A]/40 hover:border-[#87977A] bg-[#87977A]/5 dark:bg-[#87977A]/10 flex flex-col items-center justify-center gap-1.5 group transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#87977A]"
-            >
-              <div className="w-6 h-6 rounded-full bg-[#87977A]/20 dark:bg-[#87977A]/30 flex items-center justify-center text-[#87977A] group-hover:bg-[#87977A]/40 group-hover:scale-110 transition-all">
-                <FolderOpen className="w-3.5 h-3.5" />
-              </div>
-              <span className="font-silkscreen text-[7.5px] text-[#87977A] uppercase tracking-wider text-center px-0.5 leading-tight">
-                IMPORT
-                <br />
-                ROM
-              </span>
-            </button>
-          </motion.div>
         </div>
 
         {/* Tactile front shelf ledge */}

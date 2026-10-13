@@ -9,6 +9,8 @@ import { ShareCartridgeModal } from './components/Share/ShareCartridgeModal';
 import { FloatingControls } from './components/Controls/FloatingControls';
 import { FolderModal } from './components/Folder/FolderModal';
 import { AssignFolderModal } from './components/Folder/AssignFolderModal';
+import { HowToUseModal } from './components/Common/HowToUseModal';
+import { Upload, HelpCircle } from 'lucide-react';
 import {
   loadAllCartridges,
   saveCartridge,
@@ -54,6 +56,7 @@ export const App: React.FC = () => {
   const [editingCartridge, setEditingCartridge] = useState<Cartridge | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [sharingCartridge, setSharingCartridge] = useState<Cartridge | null>(null);
+  const [isHowToUseOpen, setIsHowToUseOpen] = useState(false);
   const [isDraggingOverPage, setIsDraggingOverPage] = useState(false);
 
   // File import ref for menu
@@ -468,24 +471,45 @@ export const App: React.FC = () => {
   }, []);
 
   // Delete Folder (cartridges return safely to main shelf)
-  const handleDeleteFolder = useCallback((folderId: string) => {
-    setFolders((prev) => {
-      const updated = prev.filter((f) => f.id !== folderId);
-      saveFolders(updated);
-      return updated;
-    });
-    if (selectedFolderId === folderId) {
-      setSelectedFolderId(null);
-    }
-    setCartridges((prev) => {
-      const updated = prev.map((c) =>
-        c.folderId === folderId ? { ...c, folderId: undefined } : c
+  // Delete Folder (and permanently delete all cartridges inside it)
+  const handleDeleteFolder = useCallback(
+    async (folderId: string) => {
+      const folderToDelete = folders.find((f) => f.id === folderId);
+      const cartridgesToDelete = cartridges.filter((c) => c.folderId === folderId);
+
+      // Eject if the currently playing cartridge is in this folder
+      if (loadedCartridgeId && cartridgesToDelete.some((c) => c.id === loadedCartridgeId)) {
+        setLoadedCartridgeId(null);
+      }
+
+      // Delete folder from state & storage
+      setFolders((prev) => {
+        const updated = prev.filter((f) => f.id !== folderId);
+        saveFolders(updated);
+        return updated;
+      });
+
+      if (selectedFolderId === folderId) {
+        setSelectedFolderId(null);
+      }
+
+      // Delete each cartridge inside the folder from IndexedDB
+      for (const c of cartridgesToDelete) {
+        await deleteCartridge(c.id);
+      }
+
+      // Remove cartridges from memory state
+      setCartridges((prev) => prev.filter((c) => c.folderId !== folderId));
+
+      const count = cartridgesToDelete.length;
+      showToast(
+        count > 0
+          ? `Deleted folder "${folderToDelete?.name || ''}" and its ${count} cartridge${count > 1 ? 's' : ''}.`
+          : `Deleted folder "${folderToDelete?.name || ''}".`
       );
-      saveAllCartridges(updated);
-      return updated;
-    });
-    showToast('Folder deleted. Cartridges returned to main shelf.');
-  }, [selectedFolderId]);
+    },
+    [folders, cartridges, loadedCartridgeId, selectedFolderId]
+  );
 
   // Move Cartridge into a Folder or back to Main Shelf
   const handleMoveCartridgeToFolder = useCallback(
@@ -514,9 +538,7 @@ export const App: React.FC = () => {
     (action: string) => {
       switch (action) {
         case 'about':
-          alert(
-            'CARTRIDGE MEMORIES\nVersion 1.0\n\nA retro compact-Mac physical media player where monthly memories live in tactile cartridges.\nDeployable on Vercel with write-protected ROM sharing!'
-          );
+          setIsHowToUseOpen(true);
           break;
         case 'demo':
           handleLoadDemoData();
@@ -632,30 +654,46 @@ export const App: React.FC = () => {
         <p className="font-retro-mono text-[10px] sm:text-xs text-neutral-400 dark:text-neutral-500 uppercase tracking-widest mt-1">
           Tactile Monthly Media Console // System 7.1
         </p>
-        <a
-          href="https://www.instagram.com/draylazy/?hl=en"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-retro-mono text-[10px] sm:text-xs text-neutral-500 dark:text-neutral-400 hover:text-[#87977A] dark:hover:text-[#A6B086] transition-colors mt-1.5 inline-flex items-center gap-1.5 group cursor-pointer"
-        >
-          <svg
-            className="w-3.5 h-3.5 opacity-70 group-hover:opacity-100 transition-opacity"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        <div className="flex items-center gap-2 sm:gap-3 mt-1.5 flex-wrap justify-center">
+          <a
+            href="https://www.instagram.com/draylazy/?hl=en"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-retro-mono text-[10px] sm:text-xs text-neutral-500 dark:text-neutral-400 hover:text-[#87977A] dark:hover:text-[#A6B086] transition-colors inline-flex items-center gap-1.5 group cursor-pointer"
           >
-            <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
-            <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-            <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
-          </svg>
-          <span>by</span>
-          <span className="font-semibold text-neutral-700 dark:text-neutral-300 group-hover:text-[#87977A] dark:group-hover:text-[#A6B086] underline decoration-dotted underline-offset-2 transition-colors">
-            @draylazy
-          </span>
-        </a>
+            <svg
+              className="w-3.5 h-3.5 opacity-70 group-hover:opacity-100 transition-opacity"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+              <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+              <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+            </svg>
+            <span>by</span>
+            <span className="font-semibold text-neutral-700 dark:text-neutral-300 group-hover:text-[#87977A] dark:group-hover:text-[#A6B086] underline decoration-dotted underline-offset-2 transition-colors">
+              @draylazy
+            </span>
+          </a>
+
+          <span className="text-neutral-300 dark:text-neutral-700 text-xs hidden sm:inline">•</span>
+
+          <button
+            type="button"
+            onClick={() => {
+              sound.playBeep();
+              setIsHowToUseOpen(true);
+            }}
+            className="font-silkscreen text-[9px] sm:text-[10px] text-neutral-600 dark:text-neutral-400 hover:text-[#87977A] dark:hover:text-[#A6B086] bg-neutral-200/60 dark:bg-neutral-800/60 hover:bg-[#87977A]/15 px-2.5 py-0.5 rounded-full border border-black/10 dark:border-white/10 transition-colors inline-flex items-center gap-1 cursor-pointer"
+          >
+            <HelpCircle className="w-3 h-3" />
+            <span>HOW TO USE</span>
+          </button>
+        </div>
       </header>
 
       {/* 2. Main Console Stage */}
@@ -676,14 +714,51 @@ export const App: React.FC = () => {
           reducedMotion={settings.reducedMotion}
         />
 
-        {/* Console Subtext Headline */}
-        <div className="text-center mt-7 sm:mt-9 select-none">
-          <h2 className="text-xl sm:text-2xl font-medium tracking-tight text-[#2B2A27] dark:text-[#EAE8E0]">
-            Pick a cartridge. Make something.
-          </h2>
-          <p className="text-xs sm:text-sm text-neutral-400 dark:text-neutral-500 mt-1 font-sans">
-            Drag a cartridge into the slot, or tap to insert.
-          </p>
+        {/* Console Subtext Headline & Cartridge Upload Notification Prompt */}
+        <div className="text-center mt-7 sm:mt-9 select-none flex flex-col items-center gap-3">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-medium tracking-tight text-[#2B2A27] dark:text-[#EAE8E0]">
+              Pick a cartridge. Make something.
+            </h2>
+            <p className="text-xs sm:text-sm text-neutral-400 dark:text-neutral-500 mt-1 font-sans">
+              Drag a cartridge into the slot, or tap to insert.
+            </p>
+          </div>
+
+          {/* Interactive Notification / Upload Prompt: "Do you have a cartridge? Upload it" */}
+          <div className="inline-flex items-center gap-2 sm:gap-2.5 px-3.5 sm:px-4 py-1.5 bg-[#EAE8E0]/90 dark:bg-[#2C2C2E]/90 border-2 border-[#2C2B29]/30 dark:border-[#545459] rounded-full shadow-[2px_2px_0px_rgba(0,0,0,0.15)] hover:border-[#87977A] dark:hover:border-[#87977A] transition-all group backdrop-blur-xs">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#87977A] opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#87977A]" />
+            </span>
+            <span className="font-retro-mono text-[10.5px] sm:text-[11px] text-[#2C2B29] dark:text-[#E2E0D8]">
+              Do you have a cartridge?
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                sound.playClunk();
+                fileImportInputRef.current?.click();
+              }}
+              title="Upload and insert a .cartridge or .txt file"
+              className="px-2.5 py-0.5 bg-[#87977A] hover:bg-[#738361] text-white font-silkscreen text-[9px] rounded-full cursor-pointer transition-colors shadow-xs flex items-center gap-1 active:scale-95"
+            >
+              <Upload className="w-3 h-3" />
+              <span>UPLOAD IT</span>
+            </button>
+            <span className="text-neutral-300 dark:text-neutral-600 text-xs">|</span>
+            <button
+              type="button"
+              onClick={() => {
+                sound.playBeep();
+                setIsHowToUseOpen(true);
+              }}
+              title="Learn how to use Cartridge Memories"
+              className="font-silkscreen text-[9px] text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200 cursor-pointer transition-colors"
+            >
+              GUIDE
+            </button>
+          </div>
         </div>
       </main>
 
@@ -706,7 +781,6 @@ export const App: React.FC = () => {
           onMoveToFolder={(c) => setMovingCartridge(c)}
           onSelectCartridge={handleSelectCartridge}
           onNewCartridge={handleNewCartridge}
-          onOpenImport={() => fileImportInputRef.current?.click()}
           onEditCartridge={handleEditCartridge}
           onShareCartridge={handleShareCartridge}
           onDeleteCartridge={handleDeleteCartridge}
@@ -790,13 +864,25 @@ export const App: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* 9. Floating Round Controls (Sound, Dark Mode) */}
+      {/* 9. Floating Round Controls (Sound, Dark Mode, Help) */}
       <FloatingControls
         darkMode={settings.darkMode}
         onToggleDarkMode={handleToggleDarkMode}
         soundEnabled={settings.soundEnabled}
         onToggleSound={handleToggleSound}
+        onOpenHowToUse={() => setIsHowToUseOpen(true)}
       />
+
+      {/* 9b. How to Use / Guide Modal */}
+      <AnimatePresence>
+        {isHowToUseOpen && (
+          <HowToUseModal
+            onClose={() => setIsHowToUseOpen(false)}
+            onOpenUpload={() => fileImportInputRef.current?.click()}
+            onLoadDemoData={handleLoadDemoData}
+          />
+        )}
+      </AnimatePresence>
 
       {/* 10. Retro Toast Notification */}
       <AnimatePresence>
