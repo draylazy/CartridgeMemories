@@ -219,16 +219,24 @@ export const App: React.FC = () => {
 
         dragSessionRef.current.currentPointer = { x: e.clientX, y: e.clientY };
 
-        // Check if cursor is hovering over/near the console slot
+        // Check if cursor is hovering over the Mac Console or slot
+        const consoleEl = document.getElementById('mac-console');
         const slotEl = document.getElementById('cartridge-slot');
         let isNear = false;
-        if (slotEl) {
+        if (consoleEl) {
+          const rect = consoleEl.getBoundingClientRect();
+          isNear =
+            e.clientX >= rect.left - 40 &&
+            e.clientX <= rect.right + 40 &&
+            e.clientY >= rect.top - 40 &&
+            e.clientY <= rect.bottom + 60;
+        } else if (slotEl) {
           const slotRect = slotEl.getBoundingClientRect();
           isNear =
-            e.clientY < slotRect.bottom + 80 &&
-            e.clientY > slotRect.top - 120 &&
-            e.clientX > slotRect.left - 60 &&
-            e.clientX < slotRect.right + 60;
+            e.clientY < slotRect.bottom + 100 &&
+            e.clientY > slotRect.top - 180 &&
+            e.clientX > slotRect.left - 80 &&
+            e.clientX < slotRect.right + 80;
         }
 
         setIsSlotHovered(isNear);
@@ -260,19 +268,28 @@ export const App: React.FC = () => {
             session.originRect.top + session.originRect.height / 2
           );
         } else {
-          // Dragged! Check if dropped over slot
+          // Dragged! Check if dropped over the Mac console player or slot
+          const consoleEl = document.getElementById('mac-console');
           const slotEl = document.getElementById('cartridge-slot');
-          let droppedInSlot = false;
-          if (slotEl) {
+          let droppedInPlayer = false;
+
+          if (consoleEl) {
+            const rect = consoleEl.getBoundingClientRect();
+            droppedInPlayer =
+              e.clientX >= rect.left - 50 &&
+              e.clientX <= rect.right + 50 &&
+              e.clientY >= rect.top - 50 &&
+              e.clientY <= rect.bottom + 70;
+          } else if (slotEl) {
             const slotRect = slotEl.getBoundingClientRect();
-            droppedInSlot =
-              e.clientY < slotRect.bottom + 80 &&
-              e.clientY > slotRect.top - 120 &&
-              e.clientX > slotRect.left - 60 &&
-              e.clientX < slotRect.right + 60;
+            droppedInPlayer =
+              e.clientY < slotRect.bottom + 120 &&
+              e.clientY > slotRect.top - 200 &&
+              e.clientX > slotRect.left - 80 &&
+              e.clientX < slotRect.right + 80;
           }
 
-          if (droppedInSlot || e.clientY < window.innerHeight * 0.55) {
+          if (droppedInPlayer || e.clientY < window.innerHeight * 0.58) {
             // Drop successful! Animate into slot from drop position
             startInsertionAnimation(session.cartridge, e.clientX, e.clientY);
           } else {
@@ -647,8 +664,8 @@ export const App: React.FC = () => {
       )}
 
       {/* 1. Header with Handwritten Signature Logo Wordmark */}
-      <header className="w-full flex flex-col items-center text-center pt-2 sm:pt-4 select-none">
-        <h1 className="font-signature text-4xl sm:text-5xl md:text-6xl text-[#2B2A27] dark:text-[#EAE8E0] tracking-tight leading-none drop-shadow-xs">
+      <header className="w-full flex flex-col items-center text-center pt-4 sm:pt-6 select-none">
+        <h1 className="font-signature text-4xl sm:text-5xl md:text-6xl text-[#2B2A27] dark:text-[#EAE8E0] tracking-tight leading-normal py-1 drop-shadow-xs">
           Cartridge Memories
         </h1>
         <p className="font-retro-mono text-[10px] sm:text-xs text-neutral-400 dark:text-neutral-500 uppercase tracking-widest mt-1">
@@ -710,6 +727,7 @@ export const App: React.FC = () => {
           onDuplicate={handleDuplicateCartridge}
           onDropFile={handleImportFile}
           isSlotHovered={isSlotHovered}
+          isInserting={Boolean(insertingState)}
           onMenuAction={handleMenuAction}
           reducedMotion={settings.reducedMotion}
         />

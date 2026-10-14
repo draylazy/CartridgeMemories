@@ -49,8 +49,59 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
 }) => {
   const shelfRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
+  const tabsRef = useRef<HTMLDivElement>(null);
   const [scrollProgress, setScrollProgress] = useState(0);
   const [canScroll, setCanScroll] = useState(false);
+
+  // Smooth momentum scrolling state
+  const targetScrollRef = useRef(0);
+  const rafIdRef = useRef<number | null>(null);
+
+  const stopAnimation = () => {
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+  };
+
+  const smoothScrollTo = (target: number, immediate = false) => {
+    const el = shelfRef.current;
+    if (!el) return;
+    const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
+    targetScrollRef.current = Math.max(0, Math.min(maxScroll, target));
+
+    if (reducedMotion || immediate) {
+      stopAnimation();
+      el.scrollLeft = targetScrollRef.current;
+      return;
+    }
+
+    if (rafIdRef.current !== null) return;
+
+    const step = () => {
+      const shelf = shelfRef.current;
+      if (!shelf) {
+        rafIdRef.current = null;
+        return;
+      }
+
+      const current = shelf.scrollLeft;
+      const dest = targetScrollRef.current;
+      const diff = dest - current;
+
+      if (Math.abs(diff) < 0.6) {
+        shelf.scrollLeft = dest;
+        rafIdRef.current = null;
+        return;
+      }
+
+      // 0.16 easing: buttery smooth deceleration curve across 60/120/144Hz displays
+      shelf.scrollLeft = current + diff * 0.16;
+      rafIdRef.current = requestAnimationFrame(step);
+    };
+
+    rafIdRef.current = requestAnimationFrame(step);
+  };
 
   // Monitor scroll position of the shelf
   useEffect(() => {
@@ -66,6 +117,10 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
         setCanScroll(true);
         setScrollProgress(Math.min(1, Math.max(0, el.scrollLeft / maxScroll)));
       }
+      // Keep target in sync when user scrolls via native touch or window resize
+      if (rafIdRef.current === null) {
+        targetScrollRef.current = el.scrollLeft;
+      }
     };
 
     checkScroll();
@@ -75,8 +130,90 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
     return () => {
       el.removeEventListener('scroll', checkScroll);
       window.removeEventListener('resize', checkScroll);
+      stopAnimation();
     };
   }, [cartridges.length, selectedFolderId]);
+
+  // Buttery-smooth wheel listener with momentum easing & horizontal normalization
+  useEffect(() => {
+    const el = shelfRef.current;
+    if (!el) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (maxScroll <= 0) return;
+
+      const isHorizontalGesture = Math.abs(e.deltaX) > Math.abs(e.deltaY);
+      const rawDelta = isHorizontalGesture ? e.deltaX : e.deltaY;
+      if (Math.abs(rawDelta) < 0.1) return;
+
+      // Normalize delta across trackpads and ratcheted mouse wheels
+      let delta = rawDelta;
+      if (e.deltaMode === 1) {
+        // Firefox lines
+        delta *= 38;
+      } else if (e.deltaMode === 2) {
+        // Pages
+        delta *= el.clientWidth * 0.75;
+      } else {
+        // Pixel mode: if it's a notched wheel tick (>= 50px), give it comfortable travel
+        if (Math.abs(rawDelta) >= 50) {
+          delta = Math.sign(rawDelta) * Math.max(90, Math.abs(rawDelta) * 1.15);
+        }
+      }
+
+      // Check boundary conditions:
+      const isPastStart = el.scrollLeft <= 1 && delta < 0;
+      const isPastEnd = el.scrollLeft >= maxScroll - 1 && delta > 0;
+
+      // If user reaches end and it's a vertical scroll, allow vertical page scroll
+      if ((isPastStart || isPastEnd) && !isHorizontalGesture) {
+        return;
+      }
+
+      e.preventDefault();
+
+      // If reversing direction mid-glide, cancel old momentum and start fresh from current position
+      const currentDiff = targetScrollRef.current - el.scrollLeft;
+      if ((currentDiff > 20 && delta < 0) || (currentDiff < -20 && delta > 0)) {
+        targetScrollRef.current = el.scrollLeft;
+      } else if (rafIdRef.current === null) {
+        targetScrollRef.current = el.scrollLeft;
+      }
+
+      smoothScrollTo(targetScrollRef.current + delta);
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', handleWheel);
+    };
+  }, [reducedMotion]);
+
+  // Smooth wheel support for Folder Tabs bar
+  useEffect(() => {
+    const el = tabsRef.current;
+    if (!el) return;
+
+    const handleTabsWheel = (e: WheelEvent) => {
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (maxScroll <= 0) return;
+
+      const isHorizontal = Math.abs(e.deltaX) > Math.abs(e.deltaY);
+      const delta = isHorizontal ? e.deltaX : e.deltaY;
+      if (Math.abs(delta) < 1) return;
+
+      const isPastStart = el.scrollLeft <= 1 && delta < 0;
+      const isPastEnd = el.scrollLeft >= maxScroll - 1 && delta > 0;
+      if ((isPastStart || isPastEnd) && !isHorizontal) return;
+
+      e.preventDefault();
+      el.scrollBy({ left: delta, behavior: 'smooth' });
+    };
+
+    el.addEventListener('wheel', handleTabsWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleTabsWheel);
+  }, [folders.length]);
 
   const handleTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!shelfRef.current || !trackRef.current) return;
@@ -84,13 +221,15 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
     const clickX = e.clientX - rect.left;
     const ratio = Math.max(0, Math.min(1, clickX / rect.width));
     const maxScroll = shelfRef.current.scrollWidth - shelfRef.current.clientWidth;
-    shelfRef.current.scrollTo({ left: ratio * maxScroll, behavior: 'smooth' });
+    smoothScrollTo(ratio * maxScroll);
   };
 
   const handleThumbPointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
     e.preventDefault();
     if (!shelfRef.current || !trackRef.current) return;
+
+    stopAnimation();
 
     const startX = e.clientX;
     const initialScroll = shelfRef.current.scrollLeft;
@@ -100,7 +239,11 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
     const onPointerMove = (ev: PointerEvent) => {
       const deltaX = ev.clientX - startX;
       const scrollDelta = (deltaX / trackRect.width) * maxScroll;
-      shelfRef.current?.scrollTo({ left: initialScroll + scrollDelta });
+      const newScroll = Math.max(0, Math.min(maxScroll, initialScroll + scrollDelta));
+      if (shelfRef.current) {
+        shelfRef.current.scrollLeft = newScroll;
+        targetScrollRef.current = newScroll;
+      }
     };
 
     const onPointerUp = () => {
@@ -113,10 +256,65 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
   };
 
   const scroll = (direction: 'left' | 'right') => {
-    if (shelfRef.current) {
-      const offset = direction === 'left' ? -280 : 280;
-      shelfRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+    if (!shelfRef.current) return;
+    if (rafIdRef.current === null) {
+      targetScrollRef.current = shelfRef.current.scrollLeft;
     }
+    const offset = direction === 'left' ? -320 : 320;
+    smoothScrollTo(targetScrollRef.current + offset);
+  };
+
+  // Drag-to-pan on empty shelf background with inertial momentum release
+  const handleShelfPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('button, [data-cartridge-item], input, textarea, a')) {
+      return;
+    }
+
+    const el = shelfRef.current;
+    if (!el) return;
+
+    stopAnimation();
+
+    const startX = e.clientX;
+    const initialScroll = el.scrollLeft;
+    let lastX = startX;
+    let lastTime = performance.now();
+    let velocity = 0;
+    let hasDragged = false;
+
+    const onPointerMove = (ev: PointerEvent) => {
+      const deltaX = ev.clientX - startX;
+      if (Math.abs(deltaX) > 4) {
+        hasDragged = true;
+      }
+      if (!hasDragged) return;
+
+      const now = performance.now();
+      const dt = Math.max(1, now - lastTime);
+      const dx = ev.clientX - lastX;
+      velocity = (dx / dt) * 16.67; // px/frame
+
+      lastX = ev.clientX;
+      lastTime = now;
+
+      el.scrollLeft = initialScroll - deltaX;
+      targetScrollRef.current = el.scrollLeft;
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+
+      if (hasDragged && Math.abs(velocity) > 2) {
+        const momentum = -velocity * 8;
+        smoothScrollTo(el.scrollLeft + momentum);
+      }
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
   };
 
   // Filter cartridges by selected folder if one is chosen
@@ -135,7 +333,10 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
     <div className="relative w-full max-w-5xl mx-auto px-2 sm:px-4 mt-6 mb-16">
       {/* 1. Storage Folders / Cases Navigation Bar */}
       <div className="flex items-center justify-between mb-2 px-0.5 sm:px-1 gap-2 w-full">
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 w-full no-scrollbar scroll-smooth flex-nowrap -mx-0.5 px-0.5">
+        <div
+          ref={tabsRef}
+          className="flex items-center gap-1.5 overflow-x-auto pb-1.5 w-full no-scrollbar flex-nowrap -mx-0.5 px-0.5 smooth-shelf"
+        >
           {/* Main Shelf / All Cartridges Tab */}
           <button
             type="button"
@@ -239,7 +440,8 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
 
         <div
           ref={shelfRef}
-          className="flex items-end gap-2 sm:gap-2.5 overflow-x-auto pb-4 pt-4 px-3 sm:px-6 scroll-smooth no-scrollbar min-h-[195px]"
+          onPointerDown={handleShelfPointerDown}
+          className="flex items-end gap-2 sm:gap-2.5 overflow-x-auto pb-4 pt-4 px-3 sm:px-6 no-scrollbar min-h-[205px] sm:min-h-[220px] smooth-shelf"
         >
           {/* "+ New Cartridge" Slot FIRST at the START of the shelf */}
           <motion.div
@@ -255,7 +457,7 @@ export const CartridgeShelf: React.FC<CartridgeShelfProps> = ({
                 onNewCartridge();
               }}
               aria-label="Create new cartridge"
-              className="w-[48px] sm:w-[54px] h-[150px] sm:h-[168px] rounded-t-lg rounded-b-md border-2 border-dashed border-[#87977A]/70 dark:border-[#87977A]/50 hover:border-[#87977A] bg-[#87977A]/10 dark:bg-[#87977A]/10 hover:bg-[#87977A]/20 flex flex-col items-center justify-center gap-1.5 group transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#87977A]"
+              className="w-[40px] sm:w-[44px] h-[160px] sm:h-[180px] rounded-t-lg rounded-b-md border-2 border-dashed border-[#87977A]/70 dark:border-[#87977A]/50 hover:border-[#87977A] bg-[#87977A]/10 dark:bg-[#87977A]/10 hover:bg-[#87977A]/20 flex flex-col items-center justify-center gap-1.5 group transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#87977A]"
             >
               <div className="w-6 h-6 rounded-full bg-[#87977A] text-white flex items-center justify-center group-hover:scale-110 transition-all shadow-xs">
                 <Plus className="w-3.5 h-3.5" />

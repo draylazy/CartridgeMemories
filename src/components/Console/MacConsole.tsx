@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import type { Cartridge } from '../../types';
 import { CrtScreenContent } from './CrtScreenContent';
+import { CartridgeVisual } from '../Shelf/CartridgeVisual';
 import { sound } from '../../services/audio';
 
 interface MacConsoleProps {
@@ -13,6 +14,7 @@ interface MacConsoleProps {
   onDuplicate?: () => void;
   onDropFile?: (file: File) => void;
   isSlotHovered?: boolean;
+  isInserting?: boolean;
   onDropInSlot?: (e: React.DragEvent) => void;
   onMenuAction?: (action: string) => void;
   reducedMotion?: boolean;
@@ -27,6 +29,7 @@ export const MacConsole: React.FC<MacConsoleProps> = ({
   onDuplicate,
   onDropFile,
   isSlotHovered = false,
+  isInserting = false,
   onMenuAction,
 }) => {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -46,7 +49,7 @@ export const MacConsole: React.FC<MacConsoleProps> = ({
   };
 
   return (
-    <div className="relative flex flex-col items-center select-none">
+    <div id="mac-console" className="relative flex flex-col items-center select-none">
       {/* Console Main Body: Classic Compact-Mac beige/cream chassis */}
       <div
         className="relative w-full max-w-[340px] sm:max-w-[460px] md:max-w-[490px] rounded-[24px] sm:rounded-[36px] p-4 sm:p-7 transition-colors duration-300"
@@ -255,8 +258,8 @@ export const MacConsole: React.FC<MacConsoleProps> = ({
         </div>
 
         {/* Lower Console Deck: Slot, Status Light, Rainbow Badge, Eject Button */}
-        <div className="mt-4 sm:mt-5 flex flex-col gap-3">
-          {/* Cartridge Slot: dark horizontal bar with sliding flap / indicator */}
+        <div className="mt-4 sm:mt-5 flex flex-col items-center gap-3 w-full">
+          {/* Cartridge Slot: length and height matching the horizontal cartridge exactly */}
           <div
             id="cartridge-slot"
             tabIndex={0}
@@ -269,44 +272,60 @@ export const MacConsole: React.FC<MacConsoleProps> = ({
                 onDropFile?.(e.dataTransfer.files[0]);
               }
             }}
-            className={`relative w-full h-8 sm:h-9 bg-[#2B2A27] dark:bg-[#161618] rounded-md border-2 ${
-              isSlotHovered
-                ? 'border-[#87977A] ring-4 ring-[#87977A]/40 scale-[1.01]'
-                : 'border-black/30'
-            } shadow-[inset_0_3px_5px_rgba(0,0,0,0.8),0_1px_1px_rgba(255,255,255,0.4)] flex items-center justify-between px-3 transition-all`}
+            className={`relative w-[172px] sm:w-[192px] h-[48px] sm:h-[54px] bg-[#242320] dark:bg-[#141416] rounded-md border-2 ${
+              isSlotHovered || isInserting
+                ? 'border-[#87977A] ring-4 ring-[#87977A]/40 scale-[1.01] bg-[#1E251B]'
+                : 'border-black/40 dark:border-black/60'
+            } shadow-[inset_0_3px_6px_rgba(0,0,0,0.85),0_1px_1px_rgba(255,255,255,0.35)] flex items-center justify-center p-0 transition-all mx-auto overflow-hidden`}
           >
-            {/* Loaded cartridge visible inside the slot */}
+            {/* Loaded cartridge visible inside the slot in landscape */}
             {loadedCartridge ? (
               <motion.div
-                initial={{ y: 25, opacity: 0 }}
+                initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                className="flex items-center gap-2 w-full"
+                transition={{ type: 'spring', stiffness: 350, damping: 22 }}
+                className="w-full h-full flex items-center justify-center p-0"
               >
-                {/* Physical inserted cartridge lip visible inside slot */}
-                <div
-                  className="w-4 h-5 rounded-t-sm border border-black/40 shadow-sm"
-                  style={{ backgroundColor: loadedCartridge.color }}
-                />
-                <span className="font-silkscreen text-[9px] sm:text-[10px] tracking-wider text-[#B9C29A] uppercase font-bold truncate">
-                  ROM LOADED: {loadedCartridge.label}
-                </span>
-                <span className="ml-auto w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
+                <CartridgeVisual cartridge={loadedCartridge} isLandscape />
               </motion.div>
             ) : (
-              <div className="flex items-center justify-between w-full opacity-60">
+              <div className="flex items-center justify-between w-full h-full opacity-70 px-2 sm:px-3">
                 {/* Slot shutter flap detail */}
-                <div className="w-12 h-1 bg-neutral-600 rounded-full" />
-                <span className="font-silkscreen text-[8px] sm:text-[9px] text-neutral-400 tracking-widest uppercase">
-                  {isSlotHovered ? 'DROP TO INSERT' : 'CARTRIDGE SLOT'}
+                <motion.div
+                  animate={{
+                    x: isSlotHovered || isInserting ? -4 : 0,
+                    opacity: isSlotHovered || isInserting ? 0.3 : 1,
+                  }}
+                  className="w-5 sm:w-7 h-1 bg-neutral-600 rounded-full"
+                />
+                <span
+                  className={`font-silkscreen text-[7.5px] sm:text-[8.5px] tracking-widest uppercase transition-colors px-1 text-center ${
+                    isInserting
+                      ? 'text-emerald-400 font-bold animate-pulse'
+                      : isSlotHovered
+                      ? 'text-[#B9C29A] font-bold'
+                      : 'text-neutral-400'
+                  }`}
+                >
+                  {isInserting
+                    ? 'INSERTING...'
+                    : isSlotHovered
+                    ? 'DROP HERE'
+                    : 'ROM SLOT'}
                 </span>
-                <div className="w-12 h-1 bg-neutral-600 rounded-full" />
+                <motion.div
+                  animate={{
+                    x: isSlotHovered || isInserting ? 4 : 0,
+                    opacity: isSlotHovered || isInserting ? 0.3 : 1,
+                  }}
+                  className="w-5 sm:w-7 h-1 bg-neutral-600 rounded-full"
+                />
               </div>
             )}
           </div>
 
           {/* Bottom Bar: Rainbow Logo Badge, Status LED, and EJECT Button */}
-          <div className="flex items-center justify-between px-1">
+          <div className="flex items-center justify-between w-full px-1 sm:px-2">
             {/* Left: Classic 6-Color Rainbow Apple-Style Indicator Badge */}
             <div className="flex items-center gap-2.5">
               <div

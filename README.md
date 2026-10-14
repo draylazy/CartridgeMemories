@@ -1,4 +1,4 @@
-# 💾 Cartridge Memories
+# Cartridge Memories
 
 > **A tactile, nostalgic retro compact-Mac media player where monthly moments, photographs, and notes live in physical game cartridges.**
 
@@ -12,14 +12,14 @@ Cartridge Memories transforms your digital photos and journal entries into colle
 
 ---
 
-## ✨ Features
+## Features
 
-### 🕹️ Tactile Compact-Mac Console
+### Tactile Compact-Mac Console
 * **Interactive Cartridge Slot**: Drag and drop any cartridge from your shelf into the console slot or tap to slide it in with authentic mechanical clunk sound effects.
 * **Tactile Ejection**: Push the classic eject button or lever to pop the cartridge back onto the shelf with a satisfying mechanical snap.
 * **System 7.1 Aesthetics**: Vintage Apple beige chassis, recessed carry handle groove, classic pinstripe window headers, and monochrome pixel accents.
 
-### 📺 Authentic Phosphor CRT Player
+### Authentic Phosphor CRT Player
 * **Retro Display Effects**: Dynamic phosphor bloom, curvature vignette, screen curvature, and configurable scanlines (coarse and fine).
 * **Typewriter Audio & Animation**: Notes and picture captions type out letter-by-letter with authentic mechanical typewriter clicks.
 * **Playback Controls**: Play, pause, step forward/backward, and adjust playback speed:
@@ -28,7 +28,7 @@ Cartridge Memories transforms your digital photos and journal entries into colle
   * **SLOW** (3.8s per slide)
 * **Chronological Timeline**: Memory items automatically sort chronologically by date (Day 1 through Day 31) with timestamp watermarks.
 
-### 🗄️ Cartridge Shelf & Storage Folders
+### Cartridge Shelf & Storage Folders
 * **12 Default Monthly Cartridges**: Pre-configured January–December cartridges with curated nostalgic colorways (*Sage Leaf, Terracotta, Mustard Ochre, Charcoal Noir, Washed Denim, and more*).
 * **Create Custom ROMs**: Build your own cartridges (+ NEW ROM) holding up to 15 photos or custom notes:
   * **PICTURES**: Photo gallery cartridge.
@@ -37,13 +37,13 @@ Cartridge Memories transforms your digital photos and journal entries into colle
 * **Smart EXIF Extraction**: Automatically extracts capture dates (`DateTimeOriginal`, `CreateDate`) using `exifr` so your pictures sort themselves in calendar order.
 * **Color-Coded Storage Cases**: Group cartridges into custom folders (e.g., *Vacations*, *Family*, *2026 Archive*, *Special Events*).
 
-### 💾 Safe ROM Sharing & Export
+### Safe ROM Sharing & Export
 * **Export Physical ROM Files**: Export any cartridge to a standalone `.cartridge` (JSON) or `.txt` file for safe-keeping or sending to friends.
 * **Write-Protected ROMs**: Imported cartridges are marked read-only with recipient protection and original author attribution (*"From: [Sender]"*). Recipients can enjoy the memories without overwriting them, or create an editable duplicate.
 * **Drag-and-Drop Loading**: Drop any `.cartridge` file anywhere on the browser window to load it immediately.
 * **Compressed URL Sharing**: Share lightweight cartridges via base64 URL hash links.
 
-### 🔊 Procedural Web Audio Engine
+### Procedural Web Audio Engine
 * **Zero External Audio Assets**: 100% synthesized real-time procedural audio powered by the Web Audio API:
   * Solid cartridge insertion clunks
   * Heavy spring-loaded eject thuds
@@ -52,7 +52,7 @@ Cartridge Memories transforms your digital photos and journal entries into colle
   * Typewriter keystroke clicks & return dings
   * Ambient CRT phosphor hum
 
-### 🔒 100% Private & Offline-First
+### 100% Private & Offline-First
 * **Local IndexedDB Storage**: Uses IndexedDB (`idb`) for high-capacity local storage of photos, metadata, and cartridges.
 * **Zero Cloud Dependence**: Photos and notes never leave your browser.
 * **Client-side Image Optimization**: Uploaded images are compressed and scaled in the browser for instant loading and minimal storage footprint.
@@ -61,7 +61,7 @@ Cartridge Memories transforms your digital photos and journal entries into colle
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Technology | Purpose |
 | :--- | :--- |
@@ -78,7 +78,7 @@ Cartridge Memories transforms your digital photos and journal entries into colle
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```text
 CartridgeMemories/
@@ -116,7 +116,7 @@ CartridgeMemories/
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 * **Node.js**: v18.0.0 or higher
@@ -143,7 +143,7 @@ CartridgeMemories/
 
 ---
 
-## 📜 Available Scripts
+## Available Scripts
 
 * **`npm run dev`**: Launches Vite development server with Hot Module Replacement (HMR).
 * **`npm run build`**: Type-checks with `tsc` and creates an optimized production bundle in `dist/`.
@@ -152,7 +152,7 @@ CartridgeMemories/
 
 ---
 
-## 🎮 How to Use
+## How to Use
 
 1. **Insert a Cartridge**:
    * Drag any cartridge from the wooden shelf into the console slot.

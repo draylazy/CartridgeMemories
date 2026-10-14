@@ -41,102 +41,140 @@ export const CartridgeAnimationOverlay: React.FC<CartridgeAnimationOverlayProps>
   onInsertComplete,
   onReturnComplete,
 }) => {
-  const [insertStep, setInsertStep] = useState<'hover' | 'sinking'>('hover');
+  const [phase, setPhase] = useState<'aligning' | 'sinking'>('aligning');
 
-  // Trigger stage 2 of insertion (sliding into the slot opening)
+  // Trigger 2-phase physical slot insertion sequence
   useEffect(() => {
-    if (insertingState) {
-      setInsertStep('hover');
-      const t1 = setTimeout(() => {
-        sound.playClunk();
-        setInsertStep('sinking');
-      }, 300);
-
-      const t2 = setTimeout(() => {
-        onInsertComplete();
-      }, 580);
-
-      return () => {
-        clearTimeout(t1);
-        clearTimeout(t2);
-      };
+    if (!insertingState) {
+      setPhase('aligning');
+      return;
     }
-  }, [insertingState, onInsertComplete]);
+
+    setPhase('aligning');
+
+    // Stage 1 -> Stage 2: Cartridge has aligned above the slot and now slides down into the slit
+    const t1 = setTimeout(() => {
+      sound.playClunk();
+      setPhase('sinking');
+    }, 320);
+
+    // Stage 2 -> Complete: Cartridge fully seated inside console slot
+    const t2 = setTimeout(() => {
+      onInsertComplete();
+    }, 640);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [insertingState?.cartridge.id, onInsertComplete]);
+
+  const slotCenterX = insertingState
+    ? insertingState.targetSlotRect.left + insertingState.targetSlotRect.width / 2
+    : 0;
+  const slotCenterY = insertingState
+    ? insertingState.targetSlotRect.top + insertingState.targetSlotRect.height / 2
+    : 0;
 
   return (
     <div className="fixed inset-0 pointer-events-none z-[99999] overflow-hidden select-none">
-      {/* 1. ACTIVE DRAGGING CARTRIDGE (Floats freely above whole screen without being cut off) */}
+      {/* 1. ACTIVE DRAGGING CARTRIDGE (Floats freely, tilts horizontally when approaching slot) */}
       {dragState && (
         <div
           style={{
             position: 'fixed',
             left: `${dragState.pointerX}px`,
             top: `${dragState.pointerY}px`,
-            transform: `translate(-50%, -50%) rotate(${dragState.isNearSlot ? '0deg' : '4deg'}) scale(${
-              dragState.isNearSlot ? 1.04 : 1.08
-            })`,
-            transition: 'transform 0.12s ease-out',
+            transform: `translate(-50%, -50%) rotate(${
+              dragState.isNearSlot ? '0deg' : '4deg'
+            }) scale(${dragState.isNearSlot ? 1.0 : 1.08})`,
+            transition: 'transform 0.16s ease-out',
             filter: dragState.isNearSlot
-              ? 'drop-shadow(0 0 16px rgba(135,151,122,0.9)) drop-shadow(0 20px 30px rgba(0,0,0,0.45))'
+              ? 'drop-shadow(0 0 20px rgba(135,151,122,0.95)) drop-shadow(0 20px 30px rgba(0,0,0,0.5))'
               : 'drop-shadow(0 25px 35px rgba(0,0,0,0.38))',
           }}
         >
-          <CartridgeVisual cartridge={dragState.cartridge} isDragging />
+          {dragState.isNearSlot ? (
+            <CartridgeVisual cartridge={dragState.cartridge} isLandscape isDragging />
+          ) : (
+            <CartridgeVisual cartridge={dragState.cartridge} isDragging />
+          )}
         </div>
       )}
 
-      {/* 2. INSERTION ANIMATION: Goes into the cartridge slot smoothly */}
+      {/* 2. PHYSICAL SLOT INSERTION ANIMATION IN HORIZONTAL (LANDSCAPE) */}
       <AnimatePresence>
         {insertingState && (
-          <motion.div
-            key="inserting-cartridge"
-            initial={{
-              x: insertingState.fromX - 27,
-              y: insertingState.fromY - 84,
-              scale: 1.05,
-              rotate: 3,
-            }}
-            animate={
-              insertStep === 'hover'
-                ? {
-                    // Stage 1: Fly right in front of the slot opening
-                    x:
-                      insertingState.targetSlotRect.left +
-                      insertingState.targetSlotRect.width / 2 -
-                      27,
-                    y: insertingState.targetSlotRect.top - 88,
-                    scale: 1,
-                    rotate: 0,
-                    transition: {
-                      type: 'spring',
-                      stiffness: 380,
-                      damping: 26,
-                    },
-                  }
-                : {
-                    // Stage 2: Slide directly downward into the console slot
-                    x:
-                      insertingState.targetSlotRect.left +
-                      insertingState.targetSlotRect.width / 2 -
-                      27,
-                    y: insertingState.targetSlotRect.top - 20,
-                    scale: 0.94,
-                    opacity: 0,
-                    transition: {
-                      duration: 0.28,
-                      ease: [0.32, 0, 0.67, 0],
-                    },
-                  }
-            }
-            style={{
-              position: 'fixed',
-              left: 0,
-              top: 0,
-              filter: 'drop-shadow(0 15px 25px rgba(0,0,0,0.4))',
-            }}
-          >
-            <CartridgeVisual cartridge={insertingState.cartridge} />
-          </motion.div>
+          <>
+            {/* The physical cartridge: slides directly into horizontal slot */}
+            <motion.div
+              key={`inserting-${insertingState.cartridge.id}`}
+              initial={{
+                x: insertingState.fromX - (window.innerWidth < 640 ? 80 : 90),
+                y: insertingState.fromY - (window.innerWidth < 640 ? 20 : 22),
+                scale: 1.04,
+                rotate: 0,
+                clipPath: 'inset(0px 0px 0px 0px)',
+              }}
+              animate={
+                phase === 'aligning'
+                  ? {
+                      // Stage 1: Align centered directly above the slot in horizontal orientation
+                      x: slotCenterX - (window.innerWidth < 640 ? 80 : 90),
+                      y: slotCenterY - (window.innerWidth < 640 ? 20 : 22) - 60,
+                      scale: 1,
+                      rotate: 0,
+                      clipPath: 'inset(0px 0px 0px 0px)',
+                      transition: {
+                        type: 'spring',
+                        stiffness: 380,
+                        damping: 24,
+                      },
+                    }
+                  : {
+                      // Stage 2: Slide directly into the matching slot aperture
+                      x: slotCenterX - (window.innerWidth < 640 ? 80 : 90),
+                      y: slotCenterY - (window.innerWidth < 640 ? 20 : 22),
+                      scale: 1,
+                      rotate: 0,
+                      clipPath: 'inset(0px 0px 0px 0px)',
+                      transition: {
+                        duration: 0.28,
+                        ease: [0.22, 1, 0.36, 1],
+                      },
+                    }
+              }
+              style={{
+                position: 'fixed',
+                left: 0,
+                top: 0,
+                filter: 'drop-shadow(0 12px 20px rgba(0,0,0,0.45))',
+                zIndex: 99998,
+              }}
+            >
+              <CartridgeVisual cartridge={insertingState.cartridge} isLandscape />
+            </motion.div>
+
+            {/* Glowing slot aperture overlay: cartridge seats into this slot with matching length and height */}
+            <div
+              style={{
+                position: 'fixed',
+                left: `${insertingState.targetSlotRect.left}px`,
+                top: `${insertingState.targetSlotRect.top}px`,
+                width: `${insertingState.targetSlotRect.width}px`,
+                height: `${insertingState.targetSlotRect.height}px`,
+                pointerEvents: 'none',
+                zIndex: 99999,
+              }}
+              className="rounded-md border-2 border-[#87977A] ring-4 ring-[#87977A]/50 bg-[#1E251B]/75 shadow-[inset_0_4px_8px_rgba(0,0,0,0.9)] flex items-center justify-between px-3"
+            >
+              <div className="w-6 h-1 bg-black/60 rounded-full shadow-inner" />
+              <span className="font-silkscreen text-[7.5px] sm:text-[8.5px] text-emerald-400 font-bold uppercase tracking-widest animate-pulse">
+                {phase === 'aligning' ? 'ACCEPTING...' : 'LOCKING ROM'}
+              </span>
+              <div className="w-6 h-1 bg-black/60 rounded-full shadow-inner" />
+            </div>
+          </>
         )}
       </AnimatePresence>
 
@@ -146,10 +184,10 @@ export const CartridgeAnimationOverlay: React.FC<CartridgeAnimationOverlayProps>
           <motion.div
             key="returning-cartridge"
             initial={{
-              x: returningState.currentX - 27,
-              y: returningState.currentY - 84,
+              x: returningState.currentX - 22,
+              y: returningState.currentY - 90,
               scale: 1.08,
-              rotate: 4,
+              rotate: -90,
             }}
             animate={{
               x: returningState.targetRect.left,
@@ -176,3 +214,4 @@ export const CartridgeAnimationOverlay: React.FC<CartridgeAnimationOverlayProps>
     </div>
   );
 };
+

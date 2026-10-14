@@ -54,7 +54,7 @@ export const CartridgeItem: React.FC<CartridgeItemProps> = ({
   };
 
   return (
-    <div className="relative group select-none flex flex-col items-center">
+    <div data-cartridge-item="true" className="relative group select-none flex flex-col items-center">
       <motion.div
         ref={containerRef}
         tabIndex={0}
