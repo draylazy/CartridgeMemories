@@ -58,6 +58,10 @@ export const CartridgeModal: React.FC<CartridgeModalProps> = ({
 
   const MAX_PICTURES = 15;
   const currentPictureCount = items.filter((it) => !!it.imageUrl).length;
+  const currentNoteCount = items.filter((it) => !it.imageUrl).length;
+  const maxNotes = type === 'PICTURES_NOTES' ? 5 : 15;
+  const hasNotes = currentNoteCount > 0;
+  const hasPhotos = currentPictureCount > 0;
 
   // Handle multi-image upload with 15-picture limit
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -123,12 +127,24 @@ export const CartridgeModal: React.FC<CartridgeModalProps> = ({
   // Add a text note item
   const handleAddNote = () => {
     if (!newNoteText.trim()) return;
+    if (currentNoteCount >= maxNotes) {
+      sound.playBeep();
+      setUploadWarning(
+        `Cartridge full: maximum limit of ${maxNotes} notes reached for ${
+          type === 'PICTURES_NOTES' ? 'BOTH' : 'NOTES'
+        } mode.`
+      );
+      setTimeout(() => setUploadWarning(null), 4000);
+      return;
+    }
     sound.playTypewriter();
 
+    const text = newNoteText.trim().slice(0, 250);
     const newItem: MemoryItem = {
       id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       type: 'note',
-      text: newNoteText.trim(),
+      text,
+      caption: text,
       date: newNoteDate,
     };
 
@@ -160,9 +176,21 @@ export const CartridgeModal: React.FC<CartridgeModalProps> = ({
     );
   };
 
-  const updateItemCaption = (id: string, caption: string) => {
+  const updateItemText = (id: string, text: string) => {
+    const trimmed = text.slice(0, 250);
     setItems((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, caption } : it))
+      prev.map((it) =>
+        it.id === id ? { ...it, text: trimmed, caption: it.imageUrl ? (it.caption ? it.caption.slice(0, 60) : trimmed.slice(0, 60)) : trimmed } : it
+      )
+    );
+  };
+
+  const updateItemCaption = (id: string, caption: string) => {
+    const trimmed = caption.slice(0, 60);
+    setItems((prev) =>
+      prev.map((it) =>
+        it.id === id ? { ...it, caption: trimmed, text: trimmed } : it
+      )
     );
   };
 
@@ -176,7 +204,24 @@ export const CartridgeModal: React.FC<CartridgeModalProps> = ({
       label: label.trim().toUpperCase() || 'CUSTOM',
       type,
       color,
-      items: sortByDate(items),
+      items: sortByDate(
+        items.map((it) => {
+          if (it.imageUrl) {
+            const cap = (it.caption || it.text || '').trim().slice(0, 60);
+            return {
+              ...it,
+              caption: cap,
+              text: cap,
+            };
+          }
+          const content = (it.text || it.caption || '').trim().slice(0, 250);
+          return {
+            ...it,
+            text: content,
+            caption: content,
+          };
+        })
+      ),
       createdAt: initialCartridge?.createdAt || Date.now(),
       updatedAt: Date.now(),
       folderId: folderId || undefined,
@@ -260,14 +305,28 @@ export const CartridgeModal: React.FC<CartridgeModalProps> = ({
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
+                disabled={hasNotes}
+                title={
+                  hasNotes
+                    ? 'Cannot switch to PICTURES: remove all notes first, or select BOTH'
+                    : 'Pictures only format'
+                }
                 onClick={() => {
+                  if (hasNotes) {
+                    sound.playBeep();
+                    setUploadWarning('Cannot switch to PICTURES format while notes exist. Delete all notes first, or use BOTH.');
+                    setTimeout(() => setUploadWarning(null), 4000);
+                    return;
+                  }
                   sound.playBeep();
                   setType('PICTURES');
                 }}
                 className={`py-2 px-2 rounded border-2 font-silkscreen text-[9px] sm:text-[10px] flex items-center justify-center gap-1.5 transition-all ${
                   type === 'PICTURES'
                     ? 'bg-[#2C2B29] text-[#F6F4ED] border-[#2C2B29] shadow-[2px_2px_0_#000]'
-                    : 'bg-white dark:bg-[#1E1E20] border-[#2C2B29]/40 hover:border-[#2C2B29]'
+                    : hasNotes
+                    ? 'bg-neutral-100 dark:bg-neutral-800/40 border-neutral-300 dark:border-neutral-700/50 text-neutral-400 dark:text-neutral-500 cursor-not-allowed opacity-50'
+                    : 'bg-white dark:bg-[#1E1E20] border-[#2C2B29]/40 hover:border-[#2C2B29] cursor-pointer'
                 }`}
               >
                 <Image className="w-3.5 h-3.5" />
@@ -275,14 +334,28 @@ export const CartridgeModal: React.FC<CartridgeModalProps> = ({
               </button>
               <button
                 type="button"
+                disabled={hasPhotos}
+                title={
+                  hasPhotos
+                    ? 'Cannot switch to NOTES: remove all photos first, or select BOTH'
+                    : 'Notes only format'
+                }
                 onClick={() => {
+                  if (hasPhotos) {
+                    sound.playBeep();
+                    setUploadWarning('Cannot switch to NOTES format while photos exist. Delete all photos first, or use BOTH.');
+                    setTimeout(() => setUploadWarning(null), 4000);
+                    return;
+                  }
                   sound.playBeep();
                   setType('NOTES');
                 }}
                 className={`py-2 px-2 rounded border-2 font-silkscreen text-[9px] sm:text-[10px] flex items-center justify-center gap-1.5 transition-all ${
                   type === 'NOTES'
                     ? 'bg-[#2C2B29] text-[#F6F4ED] border-[#2C2B29] shadow-[2px_2px_0_#000]'
-                    : 'bg-white dark:bg-[#1E1E20] border-[#2C2B29]/40 hover:border-[#2C2B29]'
+                    : hasPhotos
+                    ? 'bg-neutral-100 dark:bg-neutral-800/40 border-neutral-300 dark:border-neutral-700/50 text-neutral-400 dark:text-neutral-500 cursor-not-allowed opacity-50'
+                    : 'bg-white dark:bg-[#1E1E20] border-[#2C2B29]/40 hover:border-[#2C2B29] cursor-pointer'
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
@@ -290,20 +363,53 @@ export const CartridgeModal: React.FC<CartridgeModalProps> = ({
               </button>
               <button
                 type="button"
+                disabled={currentNoteCount > 5}
+                title={
+                  currentNoteCount > 5
+                    ? `Cannot switch to BOTH: contains ${currentNoteCount} notes (max 5 allowed in BOTH mode)`
+                    : 'Pictures + Notes format'
+                }
                 onClick={() => {
+                  if (currentNoteCount > 5) {
+                    sound.playBeep();
+                    setUploadWarning(
+                      `Cannot switch to BOTH: cartridge has ${currentNoteCount} notes, but BOTH mode allows a maximum of 5 notes. Remove ${
+                        currentNoteCount - 5
+                      } note${currentNoteCount - 5 === 1 ? '' : 's'} first.`
+                    );
+                    setTimeout(() => setUploadWarning(null), 5000);
+                    return;
+                  }
                   sound.playBeep();
                   setType('PICTURES_NOTES');
                 }}
                 className={`py-2 px-2 rounded border-2 font-silkscreen text-[9px] sm:text-[10px] flex items-center justify-center gap-1.5 transition-all ${
                   type === 'PICTURES_NOTES'
                     ? 'bg-[#2C2B29] text-[#F6F4ED] border-[#2C2B29] shadow-[2px_2px_0_#000]'
-                    : 'bg-white dark:bg-[#1E1E20] border-[#2C2B29]/40 hover:border-[#2C2B29]'
+                    : currentNoteCount > 5
+                    ? 'bg-neutral-100 dark:bg-neutral-800/40 border-neutral-300 dark:border-neutral-700/50 text-neutral-400 dark:text-neutral-500 cursor-not-allowed opacity-50'
+                    : 'bg-white dark:bg-[#1E1E20] border-[#2C2B29]/40 hover:border-[#2C2B29] cursor-pointer'
                 }`}
               >
                 <Layers className="w-3.5 h-3.5" />
                 BOTH
               </button>
             </div>
+            {hasNotes && type !== 'PICTURES' && (
+              <p className="text-[9px] font-retro-mono text-neutral-500 dark:text-neutral-400">
+                ℹ️ To switch to <strong className="text-neutral-700 dark:text-neutral-300">PICTURES</strong>, remove all notes below or select <strong className="text-neutral-700 dark:text-neutral-300">BOTH</strong>.
+              </p>
+            )}
+            {hasPhotos && type !== 'NOTES' && (
+              <p className="text-[9px] font-retro-mono text-neutral-500 dark:text-neutral-400">
+                ℹ️ To switch to <strong className="text-neutral-700 dark:text-neutral-300">NOTES</strong>, remove photos below or select <strong className="text-neutral-700 dark:text-neutral-300">BOTH</strong>.
+              </p>
+            )}
+            {currentNoteCount > 5 && type !== 'PICTURES_NOTES' && (
+              <p className="text-[9px] font-retro-mono text-amber-600 dark:text-amber-400">
+                ⚠️ <strong className="font-silkscreen text-[8.5px]">BOTH</strong> format limit is 5 notes (currently {currentNoteCount}). Remove {currentNoteCount - 5} note(s) to switch to BOTH.
+              </p>
+            )}
           </div>
 
           {/* Color Picker: 12 Muted Presets */}
@@ -360,6 +466,17 @@ export const CartridgeModal: React.FC<CartridgeModalProps> = ({
                     {currentPictureCount}/{MAX_PICTURES} PHOTOS
                   </span>
                 )}
+                {(type === 'NOTES' || type === 'PICTURES_NOTES') && (
+                  <span
+                    className={`text-[9px] font-silkscreen px-1.5 py-0.5 rounded ${
+                      currentNoteCount >= maxNotes
+                        ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400 font-bold'
+                        : 'bg-black/5 dark:bg-white/10 text-neutral-500'
+                    }`}
+                  >
+                    {currentNoteCount}/{maxNotes} NOTES
+                  </span>
+                )}
                 {items.length > 1 && (
                   <span className="text-[9px] font-silkscreen px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
                     AUTO-SORTED BY DATE
@@ -410,33 +527,58 @@ export const CartridgeModal: React.FC<CartridgeModalProps> = ({
               </div>
             )}
 
-            {/* Note input for NOTES mode */}
-            {type === 'NOTES' && (
+            {/* Note input for NOTES and BOTH (PICTURES_NOTES) modes */}
+            {(type === 'NOTES' || type === 'PICTURES_NOTES') && (
               <div className="bg-white dark:bg-[#1E1E20] border-2 border-[#2C2B29]/50 rounded p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="font-silkscreen text-[9px] uppercase">
-                    New Journal Entry
+                    New Journal Entry / Note
                   </span>
-                  <input
-                    type="date"
-                    value={newNoteDate}
-                    onChange={(e) => setNewNoteDate(e.target.value)}
-                    className="border border-[#2C2B29]/40 rounded px-1.5 py-0.5 text-[10px] bg-transparent"
-                  />
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`text-[9px] font-silkscreen ${
+                        newNoteText.length >= 250 ? 'text-red-500 font-bold' : 'text-neutral-400'
+                      }`}
+                    >
+                      {newNoteText.length}/250
+                    </span>
+                    <input
+                      type="date"
+                      value={newNoteDate}
+                      onChange={(e) => setNewNoteDate(e.target.value)}
+                      className="border border-[#2C2B29]/40 rounded px-1.5 py-0.5 text-[10px] bg-transparent"
+                    />
+                  </div>
                 </div>
                 <textarea
                   rows={3}
+                  maxLength={250}
+                  disabled={currentNoteCount >= maxNotes}
                   value={newNoteText}
                   onChange={(e) => setNewNoteText(e.target.value)}
-                  placeholder="Type a nostalgic memory or thoughts for this month..."
-                  className="w-full p-2 border border-[#2C2B29]/30 rounded bg-transparent font-retro-mono text-xs focus:outline-none"
+                  placeholder={
+                    currentNoteCount >= maxNotes
+                      ? `Maximum limit of ${maxNotes} notes reached for ${
+                          type === 'PICTURES_NOTES' ? 'BOTH' : 'NOTES'
+                        } mode.`
+                      : 'Type a nostalgic memory or thoughts for this month (max 250 chars)...'
+                  }
+                  className="w-full p-2 border border-[#2C2B29]/30 rounded bg-transparent font-retro-mono text-xs focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <button
                   type="button"
                   onClick={handleAddNote}
-                  className="px-3 py-1 bg-[#2C2B29] text-[#F6F4ED] rounded font-silkscreen text-[9px] hover:bg-[#43423F] inline-flex items-center gap-1 cursor-pointer"
+                  disabled={currentNoteCount >= maxNotes}
+                  className={`px-3 py-1 rounded font-silkscreen text-[9px] inline-flex items-center gap-1 transition-all select-none ${
+                    currentNoteCount >= maxNotes
+                      ? 'bg-neutral-300 dark:bg-neutral-700 text-neutral-500 cursor-not-allowed opacity-75'
+                      : 'bg-[#2C2B29] text-[#F6F4ED] hover:bg-[#43423F] cursor-pointer active:translate-y-0.5 shadow-[2px_2px_0_#000]'
+                  }`}
                 >
-                  <Plus className="w-3 h-3" /> ADD ENTRY
+                  <Plus className="w-3 h-3" />
+                  {currentNoteCount >= maxNotes
+                    ? `MAX NOTES (${maxNotes}/${maxNotes})`
+                    : 'ADD ENTRY'}
                 </button>
               </div>
             )}
@@ -483,19 +625,66 @@ export const CartridgeModal: React.FC<CartridgeModalProps> = ({
                           onChange={(e) => updateItemDate(item.id, e.target.value)}
                           className="border border-black/20 rounded px-1 text-[10px] bg-transparent"
                         />
+                        <span className="text-[8.5px] font-silkscreen text-neutral-400">
+                          {item.imageUrl ? 'PHOTO' : 'NOTE'}
+                        </span>
                       </div>
-                      {type === 'PICTURES_NOTES' ? (
-                        <input
-                          type="text"
-                          value={item.caption || ''}
-                          onChange={(e) => updateItemCaption(item.id, e.target.value)}
-                          placeholder="Optional caption..."
-                          className="w-full text-[10px] border-b border-black/20 bg-transparent px-1 py-0.5 focus:outline-none"
-                        />
+                      {item.imageUrl ? (
+                        type === 'PICTURES_NOTES' ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[8px] font-silkscreen text-neutral-400">
+                                PHOTO NOTE / CAPTION
+                              </span>
+                              <span
+                                className={`text-[8.5px] font-silkscreen ${
+                                  (item.caption || item.text || '').length >= 60
+                                    ? 'text-red-500 font-bold'
+                                    : 'text-neutral-400'
+                                }`}
+                              >
+                                {(item.caption || item.text || '').length}/60
+                              </span>
+                            </div>
+                            <input
+                              type="text"
+                              maxLength={60}
+                              value={item.caption || item.text || ''}
+                              onChange={(e) => updateItemCaption(item.id, e.target.value)}
+                              placeholder="Photo note / caption (max 60 chars)..."
+                              className="w-full text-[10px] border-b border-black/20 bg-transparent px-1 py-0.5 focus:outline-none font-retro-mono"
+                            />
+                          </div>
+                        ) : (
+                          <p className="text-[11px] truncate text-neutral-600 dark:text-neutral-300">
+                            {item.caption || item.text || 'Photo memory'}
+                          </p>
+                        )
                       ) : (
-                        <p className="text-[11px] truncate text-neutral-600 dark:text-neutral-300">
-                          {item.text || 'Photo memory'}
-                        </p>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[8px] font-silkscreen text-neutral-400">
+                              JOURNAL NOTE
+                            </span>
+                            <span
+                              className={`text-[8.5px] font-silkscreen ${
+                                (item.text || item.caption || '').length >= 250
+                                  ? 'text-red-500 font-bold'
+                                  : 'text-neutral-400'
+                              }`}
+                            >
+                              {(item.text || item.caption || '').length}/250
+                            </span>
+                          </div>
+                          <textarea
+                            rows={2}
+                            maxLength={250}
+                            value={item.text || item.caption || ''}
+                            onChange={(e) => updateItemText(item.id, e.target.value)}
+                            placeholder="Journal note text (max 250 chars)..."
+                            className="w-full text-[10px] border border-black/20 rounded bg-transparent px-1.5 py-0.5 focus:outline-none font-retro-mono"
+                          />
+                        </div>
                       )}
                     </div>
 

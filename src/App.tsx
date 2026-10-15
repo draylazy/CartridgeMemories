@@ -669,7 +669,7 @@ export const App: React.FC = () => {
           Cartridge Memories
         </h1>
         <p className="font-retro-mono text-[10px] sm:text-xs text-neutral-400 dark:text-neutral-500 uppercase tracking-widest mt-1">
-          Tactile Monthly Media Console // System 7.1
+          Tactile Media Console // System 7.1
         </p>
         <div className="flex items-center gap-2 sm:gap-3 mt-1.5 flex-wrap justify-center">
           <a

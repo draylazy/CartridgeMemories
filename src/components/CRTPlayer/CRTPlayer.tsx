@@ -41,24 +41,37 @@ export const CRTPlayer: React.FC<CRTPlayerProps> = ({
 
   // Auto-sort items chronologically by date (Day 1 first to Day 30 last)
   const items = useMemo(() => {
-    return sortMemoryItemsByDate(cartridge.items);
-  }, [cartridge.items]);
+    const sorted = sortMemoryItemsByDate(cartridge.items);
+    if (cartridge.type === 'PICTURES') {
+      const pics = sorted.filter((it) => !!it.imageUrl);
+      return pics.length > 0 ? pics : sorted;
+    }
+    if (cartridge.type === 'NOTES') {
+      const notes = sorted.filter((it) => !it.imageUrl || !!it.text || !!it.caption);
+      return notes.length > 0 ? notes : sorted;
+    }
+    return sorted;
+  }, [cartridge.items, cartridge.type]);
 
   const currentItem: MemoryItem | undefined = items[currentIndex];
 
+  const currentItemText = useMemo(() => {
+    if (!currentItem) return '';
+    const raw = (currentItem.caption || currentItem.text || '').trim();
+    if (currentItem.imageUrl) {
+      return raw.slice(0, 60);
+    }
+    return raw.slice(0, 250);
+  }, [currentItem]);
+
   // Dynamic slide duration: uses base speed setting, but gives ample reading headroom if note is long
   const slideDuration = useMemo(() => {
-    if (!currentItem) return baseSlideDuration;
-    const fullText =
-      cartridge.type === 'NOTES'
-        ? currentItem.text || ''
-        : currentItem.caption || '';
-    if (!fullText) return baseSlideDuration;
+    if (!currentItem || !currentItemText) return baseSlideDuration;
 
     // Minimum needed: 240ms start delay + typing time (fastest 15ms/char) + 700ms end pause
-    const minNeeded = 240 + fullText.length * 15 + 700;
+    const minNeeded = 240 + currentItemText.length * 15 + 700;
     return Math.max(baseSlideDuration, minNeeded);
-  }, [baseSlideDuration, currentItem, cartridge.type]);
+  }, [baseSlideDuration, currentItem, currentItemText]);
 
   // Boot sequence: play CRT power on hum, then open display
   useEffect(() => {
@@ -126,20 +139,13 @@ export const CRTPlayer: React.FC<CRTPlayerProps> = ({
   // 2. Adjusts speed dynamically: slower for short text (clearly visible cadence), faster for long text
   // 3. Leaves a slight pause before the next slide transitions
   useEffect(() => {
-    if (!currentItem) return;
-
-    const fullText =
-      cartridge.type === 'NOTES'
-        ? currentItem.text || ''
-        : currentItem.caption || '';
-
-    if (!fullText) {
+    if (!currentItem || !currentItemText) {
       setTypedText('');
       return;
     }
 
     if (reducedMotion) {
-      setTypedText(fullText);
+      setTypedText(currentItemText);
       return;
     }
 
@@ -156,9 +162,7 @@ export const CRTPlayer: React.FC<CRTPlayerProps> = ({
     const availableTypingDuration = Math.max(600, slideDuration - START_DELAY_MS - PAUSE_BEFORE_NEXT_MS);
 
     // Calculate ideal per-character speed:
-    // If text is short -> slower (~50-75ms) so typewriter effect is clearly visible
-    // If text is long -> faster (~14-30ms) based on the slide duration
-    const idealInterval = availableTypingDuration / fullText.length;
+    const idealInterval = availableTypingDuration / currentItemText.length;
     const charInterval = Math.max(14, Math.min(75, Math.round(idealInterval)));
 
     // Audio click cadence
@@ -170,13 +174,13 @@ export const CRTPlayer: React.FC<CRTPlayerProps> = ({
     const startTimer = setTimeout(() => {
       typingTimer = setInterval(() => {
         charIndex++;
-        setTypedText(fullText.slice(0, charIndex));
+        setTypedText(currentItemText.slice(0, charIndex));
 
         if (charIndex % audioFrequency === 0) {
           sound.playTypewriter();
         }
 
-        if (charIndex >= fullText.length) {
+        if (charIndex >= currentItemText.length) {
           if (typingTimer) clearInterval(typingTimer);
         }
       }, charInterval);
@@ -186,7 +190,7 @@ export const CRTPlayer: React.FC<CRTPlayerProps> = ({
       clearTimeout(startTimer);
       if (typingTimer) clearInterval(typingTimer);
     };
-  }, [currentIndex, currentItem, cartridge.type, reducedMotion, slideDuration]);
+  }, [currentIndex, currentItem, currentItemText, reducedMotion, slideDuration]);
 
   // Keyboard navigation: Space = pause/play, Arrows = prev/next, Esc = exit
   useEffect(() => {
@@ -322,79 +326,157 @@ export const CRTPlayer: React.FC<CRTPlayerProps> = ({
         <div className="relative z-20 flex-1 flex items-center justify-center px-4 sm:px-12 py-2 overflow-hidden">
           <AnimatePresence mode="wait">
             {/* 1. PICTURES ONLY */}
-            {cartridge.type === 'PICTURES' && currentItem.imageUrl && (
-              <motion.div
-                key={`pic-${currentIndex}`}
-                initial={{ opacity: 0.2, filter: 'brightness(1.5)' }}
-                animate={{ opacity: 1, filter: 'brightness(1)' }}
-                exit={{ opacity: 0.1 }}
-                transition={{ duration: 0.25 }}
-                className="relative max-h-full max-w-full flex items-center justify-center"
-              >
-                <img
-                  src={currentItem.imageUrl}
-                  alt={`Memory ${currentIndex + 1}`}
-                  className="max-h-[60vh] sm:max-h-[66vh] max-w-full object-contain rounded-md shadow-2xl filter contrast-110 saturate-95"
-                />
-                {/* On-screen timestamp on bottom-right of image */}
-                <div className="absolute bottom-3 right-3 bg-black/60 px-2.5 py-1 rounded text-[#FFB300] font-retro-mono text-xs font-bold tracking-wider crt-bloom border border-[#FFB300]/30 flex items-center gap-2">
-                  <span>{retroDate}</span>
-                </div>
-              </motion.div>
+            {cartridge.type === 'PICTURES' && (
+              currentItem.imageUrl ? (
+                <motion.div
+                  key={`pic-${currentIndex}`}
+                  initial={{ opacity: 0.2, filter: 'brightness(1.5)' }}
+                  animate={{ opacity: 1, filter: 'brightness(1)' }}
+                  exit={{ opacity: 0.1 }}
+                  transition={{ duration: 0.25 }}
+                  className="relative max-h-full max-w-full flex items-center justify-center"
+                >
+                  <img
+                    src={currentItem.imageUrl}
+                    alt={`Memory ${currentIndex + 1}`}
+                    className="max-h-[60vh] sm:max-h-[66vh] max-w-full object-contain rounded-md shadow-2xl filter contrast-110 saturate-95"
+                  />
+                  {/* On-screen timestamp on bottom-right of image */}
+                  <div className="absolute bottom-3 right-3 bg-black/60 px-2.5 py-1 rounded text-[#FFB300] font-retro-mono text-xs font-bold tracking-wider crt-bloom border border-[#FFB300]/30 flex items-center gap-2">
+                    <span>{retroDate}</span>
+                  </div>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key={`note-fallback-${currentIndex}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="w-full max-w-3xl bg-[#0F140D]/85 border-2 border-[#B9C29A]/40 rounded-lg p-6 sm:p-10 shadow-2xl relative overflow-hidden"
+                >
+                  <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#B9C29A]/20 font-silkscreen text-[11px] text-[#B9C29A]/80">
+                    <span>TERMINAL LOG // TRK {currentIndex + 1} OF {items.length}</span>
+                    <span className="text-[#FFB300]">{retroDate}</span>
+                  </div>
+                  <div className="font-retro-mono text-base sm:text-xl text-[#B9C29A] whitespace-pre-wrap break-words [overflow-wrap:anywhere] [word-break:break-word] max-w-full overflow-hidden leading-relaxed min-h-[160px] crt-bloom">
+                    {typedText || currentItemText}
+                    <span className="inline-block w-2.5 h-5 bg-[#B9C29A] ml-1 animate-pulse align-middle" />
+                  </div>
+                </motion.div>
+              )
             )}
 
             {/* 2. TEXT-ONLY NOTES (Retro Terminal style) */}
             {cartridge.type === 'NOTES' && (
-              <motion.div
-                key={`note-${currentIndex}`}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="w-full max-w-3xl bg-[#0F140D]/85 border-2 border-[#B9C29A]/40 rounded-lg p-6 sm:p-10 shadow-2xl relative"
-              >
-                <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#B9C29A]/20 font-silkscreen text-[11px] text-[#B9C29A]/80">
-                  <span>TERMINAL LOG // TRK {currentIndex + 1} OF {items.length}</span>
-                  <span className="text-[#FFB300]">{retroDate}</span>
-                </div>
-                
-                <div className="font-retro-mono text-base sm:text-xl text-[#B9C29A] whitespace-pre-wrap leading-relaxed min-h-[160px] crt-bloom">
-                  {typedText}
-                  <span className="inline-block w-2.5 h-5 bg-[#B9C29A] ml-1 animate-pulse align-middle" />
-                </div>
-              </motion.div>
+              !currentItem.imageUrl || currentItemText ? (
+                <motion.div
+                  key={`note-${currentIndex}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="w-full max-w-3xl bg-[#0F140D]/85 border-2 border-[#B9C29A]/40 rounded-lg p-6 sm:p-10 shadow-2xl relative overflow-hidden"
+                >
+                  <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#B9C29A]/20 font-silkscreen text-[11px] text-[#B9C29A]/80">
+                    <span>TERMINAL LOG // TRK {currentIndex + 1} OF {items.length}</span>
+                    <span className="text-[#FFB300]">{retroDate}</span>
+                  </div>
+                  
+                  <div className="font-retro-mono text-base sm:text-xl text-[#B9C29A] whitespace-pre-wrap break-words [overflow-wrap:anywhere] [word-break:break-word] max-w-full overflow-hidden leading-relaxed min-h-[160px] crt-bloom">
+                    {typedText || currentItemText}
+                    <span className="inline-block w-2.5 h-5 bg-[#B9C29A] ml-1 animate-pulse align-middle" />
+                  </div>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key={`pic-fallback-${currentIndex}`}
+                  initial={{ opacity: 0.2 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0.1 }}
+                  className="relative max-h-full max-w-full flex items-center justify-center"
+                >
+                  <img
+                    src={currentItem.imageUrl}
+                    alt={`Memory ${currentIndex + 1}`}
+                    className="max-h-[60vh] sm:max-h-[66vh] max-w-full object-contain rounded-md shadow-2xl filter contrast-110 saturate-95"
+                  />
+                  <div className="absolute bottom-3 right-3 bg-black/60 px-2.5 py-1 rounded text-[#FFB300] font-retro-mono text-xs font-bold tracking-wider crt-bloom border border-[#FFB300]/30 flex items-center gap-2">
+                    <span>{retroDate}</span>
+                  </div>
+                </motion.div>
+              )
             )}
 
-            {/* 3. PICTURES + NOTES (Photo with typewriter caption bar) */}
+            {/* 3. PICTURES + NOTES (BOTH) */}
             {cartridge.type === 'PICTURES_NOTES' && (
-              <motion.div
-                key={`pic-note-${currentIndex}`}
-                initial={{ opacity: 0.3 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0.1 }}
-                transition={{ duration: 0.25 }}
-                className="relative max-h-full max-w-4xl flex flex-col items-center justify-center"
-              >
-                {currentItem.imageUrl ? (
-                  <div className="relative max-h-[48vh] sm:max-h-[54vh] flex items-center justify-center">
+              currentItem.imageUrl ? (
+                currentItemText ? (
+                  /* Picture with typewriter caption/note bar */
+                  <motion.div
+                    key={`pic-note-${currentIndex}`}
+                    initial={{ opacity: 0.3 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0.1 }}
+                    transition={{ duration: 0.25 }}
+                    className="relative max-h-full max-w-4xl flex flex-col items-center justify-center"
+                  >
+                    <div className="relative max-h-[48vh] sm:max-h-[54vh] flex items-center justify-center">
+                      <img
+                        src={currentItem.imageUrl}
+                        alt={`Memory ${currentIndex + 1}`}
+                        className="max-h-[48vh] sm:max-h-[54vh] max-w-full object-contain rounded-t-md shadow-2xl filter contrast-110 saturate-95"
+                      />
+                      <div className="absolute top-3 right-3 bg-black/60 px-2 py-0.5 rounded text-[#FFB300] font-retro-mono text-xs font-bold tracking-wider crt-bloom border border-[#FFB300]/30">
+                        {retroDate}
+                      </div>
+                    </div>
+
+                    <div className="w-full bg-[#0F140D]/90 border border-[#B9C29A]/40 rounded-b-md p-3 sm:p-4 text-center overflow-hidden">
+                      <p className="font-retro-mono text-sm sm:text-base text-[#B9C29A] crt-bloom min-h-[28px] break-words [overflow-wrap:anywhere] [word-break:break-word] max-w-full">
+                        {typedText || currentItemText}
+                        <span className="inline-block w-2 h-4 bg-[#B9C29A] ml-1 animate-pulse align-middle" />
+                      </p>
+                    </div>
+                  </motion.div>
+                ) : (
+                  /* Picture ONLY: No note/caption -> Full picture size, NO blank space underneath! */
+                  <motion.div
+                    key={`pic-only-${currentIndex}`}
+                    initial={{ opacity: 0.2, filter: 'brightness(1.5)' }}
+                    animate={{ opacity: 1, filter: 'brightness(1)' }}
+                    exit={{ opacity: 0.1 }}
+                    transition={{ duration: 0.25 }}
+                    className="relative max-h-full max-w-full flex items-center justify-center"
+                  >
                     <img
                       src={currentItem.imageUrl}
                       alt={`Memory ${currentIndex + 1}`}
-                      className="max-h-[48vh] sm:max-h-[54vh] max-w-full object-contain rounded-t-md shadow-2xl filter contrast-110 saturate-95"
+                      className="max-h-[60vh] sm:max-h-[66vh] max-w-full object-contain rounded-md shadow-2xl filter contrast-110 saturate-95"
                     />
-                    <div className="absolute top-3 right-3 bg-black/60 px-2 py-0.5 rounded text-[#FFB300] font-retro-mono text-xs font-bold tracking-wider crt-bloom border border-[#FFB300]/30">
-                      {retroDate}
+                    <div className="absolute bottom-3 right-3 bg-black/60 px-2.5 py-1 rounded text-[#FFB300] font-retro-mono text-xs font-bold tracking-wider crt-bloom border border-[#FFB300]/30 flex items-center gap-2">
+                      <span>{retroDate}</span>
                     </div>
+                  </motion.div>
+                )
+              ) : (
+                /* Note ONLY: Retro terminal note view */
+                <motion.div
+                  key={`note-${currentIndex}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="w-full max-w-3xl bg-[#0F140D]/85 border-2 border-[#B9C29A]/40 rounded-lg p-6 sm:p-10 shadow-2xl relative overflow-hidden"
+                >
+                  <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#B9C29A]/20 font-silkscreen text-[11px] text-[#B9C29A]/80">
+                    <span>TERMINAL LOG // TRK {currentIndex + 1} OF {items.length}</span>
+                    <span className="text-[#FFB300]">{retroDate}</span>
                   </div>
-                ) : null}
-
-                {/* Bottom typewriter caption bar */}
-                <div className="w-full bg-[#0F140D]/90 border border-[#B9C29A]/40 rounded-b-md p-3 sm:p-4 text-center">
-                  <p className="font-retro-mono text-sm sm:text-base text-[#B9C29A] crt-bloom min-h-[28px]">
-                    {typedText}
-                    <span className="inline-block w-2 h-4 bg-[#B9C29A] ml-1 animate-pulse align-middle" />
-                  </p>
-                </div>
-              </motion.div>
+                  
+                  <div className="font-retro-mono text-base sm:text-xl text-[#B9C29A] whitespace-pre-wrap break-words [overflow-wrap:anywhere] [word-break:break-word] max-w-full overflow-hidden leading-relaxed min-h-[160px] crt-bloom">
+                    {typedText || currentItemText}
+                    <span className="inline-block w-2.5 h-5 bg-[#B9C29A] ml-1 animate-pulse align-middle" />
+                  </div>
+                </motion.div>
+              )
             )}
           </AnimatePresence>
         </div>

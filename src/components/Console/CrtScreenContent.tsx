@@ -168,7 +168,7 @@ export const CrtScreenContent: React.FC<CrtScreenContentProps> = ({
           </div>
         ) : (
           <div className="w-full max-w-[220px] bg-[#B9C29A]/60 border border-[#242D1F]/40 p-1.5 sm:p-2 rounded text-left font-retro-mono text-[8.5px] sm:text-[9px] line-clamp-3 mb-1.5 sm:mb-2 shadow-inner">
-            "{firstItem?.text?.slice(0, 90)}..."
+            "{(firstItem?.text || firstItem?.caption || '').slice(0, 90)}..."
           </div>
         )}
 
